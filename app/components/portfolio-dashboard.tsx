@@ -1,0 +1,718 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import {
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  LabelList,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import { AddInvestmentForm } from "@/app/components/add-investment-form";
+import { TransactionHistoryTable } from "@/app/components/transaction-history-table";
+import { NavHistoryChart } from "@/app/components/nav-history-chart";
+import type { DashboardData } from "@/lib/types";
+
+type PortfolioDashboardProps = {
+  dashboard: DashboardData;
+};
+
+const allocationColors = [
+  "#22577a",
+  "#57cc99",
+  "#c7d2fe",
+  "#c44536",
+  "#7b6d8d",
+  "#2a9d8f",
+];
+
+const RADIAN = Math.PI / 180;
+
+export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
+  const [theme, setTheme] = useState<"light" | "dark">("light");
+
+  useEffect(() => {
+    const storedTheme = window.localStorage.getItem("investment-theme");
+    const preferredTheme =
+      storedTheme === "light" || storedTheme === "dark"
+        ? storedTheme
+        : window.matchMedia("(prefers-color-scheme: dark)").matches
+          ? "dark"
+          : "light";
+
+    setTheme(preferredTheme);
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    window.localStorage.setItem("investment-theme", theme);
+  }, [theme]);
+
+  const fundChartWidth = useMemo(
+    () => Math.max(1760, dashboard.fundChart.length * 200),
+    [dashboard.fundChart.length]
+  );
+
+  const workbookConfigured = dashboard.workbookName !== "No workbook configured";
+
+  return (
+    <main className="page-shell">
+      <section className="hero">
+        <div>
+          <p className="eyebrow">My Investment Tracker</p>
+          <h1>One place for my workbook, entries, and charts.</h1>
+          <p className="hero-copy">
+            This is a personal dashboard for my own investments, with INR-first
+            numbers, rounded purchase amounts, and clear units and NAV tracking.
+          </p>
+        </div>
+
+        <div className="hero-card">
+          <div className="hero-card-row">
+            <div>
+              <p className="muted">Workbook</p>
+              <h2>{dashboard.workbookName}</h2>
+            </div>
+            <button
+              type="button"
+              className="theme-toggle"
+              onClick={() =>
+                setTheme((currentTheme) =>
+                  currentTheme === "light" ? "dark" : "light"
+                )
+              }
+            >
+              {theme === "light" ? "Dark mode" : "Light mode"}
+            </button>
+          </div>
+
+          <p className="muted hero-path">{dashboard.workbookPath}</p>
+          <div className="workbook-actions">
+            <a className="workbook-link" href="/workbook" target="_blank" rel="noreferrer">
+              Open workbook viewer
+            </a>
+            {workbookConfigured ? (
+              <a
+                className="workbook-link workbook-link-secondary"
+                href="/api/workbook"
+                target="_blank"
+                rel="noreferrer"
+              >
+                Open .xlsx
+              </a>
+            ) : null}
+          </div>
+        </div>
+      </section>
+
+      <section className="metrics-grid">
+        <MetricCard
+          label="Purchase value"
+          value={formatInrCompact(dashboard.metrics.totalInvested)}
+          detail={formatInrFull(dashboard.metrics.totalInvested)}
+        />
+        <MetricCard
+          label="Current value"
+          value={formatInrCompact(dashboard.metrics.currentValue)}
+          detail={formatInrFull(dashboard.metrics.currentValue)}
+        />
+        <MetricCard
+          label="Profit or loss"
+          value={formatInrCompact(dashboard.metrics.profitLoss)}
+          detail={formatInrFull(dashboard.metrics.profitLoss)}
+          tone={dashboard.metrics.profitLoss >= 0 ? "positive" : "negative"}
+        />
+        <MetricCard
+          label="Absolute return"
+          value={formatPercent(dashboard.metrics.absoluteReturn)}
+          tone={dashboard.metrics.absoluteReturn >= 0 ? "positive" : "negative"}
+        />
+      </section>
+
+      <section className="wide-grid">
+        <div className="panel chart-panel">
+          <div className="panel-heading">
+            <div>
+              <p className="eyebrow">By Fund</p>
+              <h2>Purchase value vs current value</h2>
+            </div>
+            <p className="muted">
+              Full fund names stay readable here, even when the list gets long.
+            </p>
+          </div>
+
+          <div className="chart-scroll">
+            <div className="chart-frame wide-chart-frame" style={{ width: `${fundChartWidth}px` }}>
+              <BarChart
+                id="fund-bar-chart"
+                width={fundChartWidth}
+                height={400}
+                data={dashboard.fundChart}
+                margin={{ top: 26, right: 20, left: 8, bottom: 54 }}
+                barCategoryGap={24}
+              >
+                <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                <XAxis
+                  dataKey="name"
+                  tickLine={false}
+                  axisLine={false}
+                  interval={0}
+                  height={120}
+                  angle={-45}
+                  textAnchor="end"
+                  tickMargin={16}
+                  tick={renderFundTick}
+                />
+                <YAxis
+                  tickFormatter={(value) => formatAxisLakhs(value)}
+                  tickLine={false}
+                  axisLine={false}
+                />
+                <Tooltip
+                  cursor={{ fill: "rgba(34, 87, 122, 0.05)" }}
+                  formatter={(value: number, _name: string, item) => {
+                    const label =
+                      item?.dataKey === "invested" ? "Purchase value" : "Current value";
+                    return [formatInrFull(Number(value)), label];
+                  }}
+                />
+                <Bar
+                  dataKey="invested"
+                  isAnimationActive={false}
+                  name="Purchase value"
+                  fill="#22577a"
+                  radius={[8, 8, 0, 0]}
+                  activeBar={{
+                    fill: "#1f4d6d",
+                    stroke: "rgba(31, 77, 109, 0.25)",
+                    strokeWidth: 1,
+                    filter: "drop-shadow(0px 8px 14px rgba(31, 77, 109, 0.22))",
+                  }}
+                >
+                  <LabelList
+                    dataKey="invested"
+                    position="top"
+                    formatter={(value: number) => formatChartTopLabel(value)}
+                    className="chart-label"
+                  />
+                </Bar>
+                <Bar
+                  dataKey="currentValue"
+                  isAnimationActive={false}
+                  name="Current value"
+                  radius={[8, 8, 0, 0]}
+                  activeBar={{
+                    stroke: "rgba(34, 87, 122, 0.2)",
+                    strokeWidth: 1,
+                    filter: "drop-shadow(0px 8px 14px rgba(34, 87, 122, 0.16))",
+                  }}
+                >
+                  <LabelList
+                    dataKey="currentValue"
+                    position="top"
+                    formatter={(value: number) => formatChartTopLabel(value)}
+                    className="chart-label"
+                  />
+                  {dashboard.fundChart.map((fund) => (
+                    <Cell
+                      key={fund.fundId}
+                      fill={fund.currentValue >= fund.invested ? "#57cc99" : "#c44536"}
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="content-grid">
+        <div className="panel chart-panel">
+          <div className="panel-heading">
+            <div>
+              <p className="eyebrow">Portfolio Flow</p>
+              <h2>Purchase value vs current value flow</h2>
+            </div>
+            <p className="muted">Current value uses the latest statement NAV for held units.</p>
+          </div>
+          <div className="chart-frame">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart id="portfolio-flow-chart" data={dashboard.portfolioFlowChart}>
+                <defs>
+                  <linearGradient id="purchaseGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#22577a" stopOpacity={0.5} />
+                    <stop offset="95%" stopColor="#22577a" stopOpacity={0.05} />
+                  </linearGradient>
+                  <linearGradient id="currentGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#57cc99" stopOpacity={0.5} />
+                    <stop offset="95%" stopColor="#57cc99" stopOpacity={0.05} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                <XAxis
+                  dataKey="period"
+                  tickFormatter={formatPeriodTick}
+                  tickLine={false}
+                  axisLine={false}
+                  minTickGap={24}
+                />
+                <YAxis
+                  tickFormatter={(value) => formatAxisLakhs(value)}
+                  tickLine={false}
+                  axisLine={false}
+                />
+                <Tooltip
+                  formatter={(value: number, name: string) => [
+                    formatInrFull(value),
+                    name === "Purchase value" ? "Purchase value" : "Current value",
+                  ]}
+                  labelFormatter={(label) => `Period: ${formatPeriodLabel(label)}`}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="purchaseValue"
+                  isAnimationActive={false}
+                  name="Purchase value"
+                  stroke="#22577a"
+                  fillOpacity={1}
+                  fill="url(#purchaseGradient)"
+                  activeDot={{ r: 5, strokeWidth: 2, stroke: "#22577a", fill: "#ffffff" }}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="currentValueGain"
+                  isAnimationActive={false}
+                  name="Current value"
+                  stroke="#57cc99"
+                  fillOpacity={0.9}
+                  fill="url(#currentGradient)"
+                  connectNulls
+                  activeDot={{ r: 5, strokeWidth: 2, stroke: "#57cc99", fill: "#ffffff" }}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="currentValueLoss"
+                  isAnimationActive={false}
+                  name="Current value"
+                  stroke="#c44536"
+                  fillOpacity={0.12}
+                  fill="#f5b0a7"
+                  connectNulls
+                  legendType="none"
+                  activeDot={{ r: 5, strokeWidth: 2, stroke: "#c44536", fill: "#ffffff" }}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {workbookConfigured ? <AddInvestmentForm funds={dashboard.funds} /> : null}
+      </section>
+
+      <section className="content-grid">
+        <div className="panel chart-panel">
+          <div className="panel-heading">
+            <div>
+              <p className="eyebrow">Every Year</p>
+              <h2>Yearly contribution bar chart</h2>
+            </div>
+            <p className="muted">One bar for each financial year&apos;s total invested amount.</p>
+          </div>
+          <div className="chart-frame">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart id="yearly-contrib-chart" data={dashboard.yearlyChart}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="financialYear" tickLine={false} axisLine={false} />
+                <YAxis
+                  tickFormatter={(value) => formatAxisLakhs(value)}
+                  tickLine={false}
+                  axisLine={false}
+                />
+                <Tooltip
+                  cursor={{ fill: "rgba(34, 87, 122, 0.05)" }}
+                  formatter={(value: number) => [formatInrFull(value), "Invested"]}
+                />
+                <Bar
+                  dataKey="contributions"
+                  isAnimationActive={false}
+                  name="Yearly contributions"
+                  fill="#22577a"
+                  radius={[8, 8, 0, 0]}
+                  activeBar={{
+                    fill: "#1f4d6d",
+                    stroke: "rgba(31, 77, 109, 0.25)",
+                    strokeWidth: 1,
+                    filter: "drop-shadow(0px 8px 14px rgba(31, 77, 109, 0.22))",
+                  }}
+                >
+                  <LabelList
+                    dataKey="contributions"
+                    position="top"
+                    formatter={(value: number) => formatChartTopLabel(value)}
+                    className="chart-label"
+                  />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        <div className="panel chart-panel">
+          <div className="panel-heading">
+            <div>
+              <p className="eyebrow">Allocation</p>
+              <h2>Current value by category</h2>
+            </div>
+            <p className="muted">Category values are shown here even without hover.</p>
+          </div>
+
+          <div className="allocation-layout">
+            <div className="allocation-chart">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart id="allocation-pie-chart" margin={{ top: 8, right: 28, bottom: 8, left: 28 }}>
+                  <Pie
+                    data={dashboard.categoryChart}
+                    isAnimationActive={false}
+                    dataKey="currentValue"
+                    nameKey="category"
+                    innerRadius={62}
+                    outerRadius={106}
+                    paddingAngle={4}
+                    labelLine
+                    label={renderAllocationOutsidePercentLabel}
+                  >
+                    {dashboard.categoryChart.map((entry, index) => (
+                      <Cell
+                        key={entry.category}
+                        fill={allocationColors[index % allocationColors.length]}
+                      />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(value: number) => formatInrFull(value)} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div className="allocation-legend">
+              {dashboard.categoryChart.map((category, index) => {
+                const share =
+                  dashboard.metrics.currentValue === 0
+                    ? 0
+                    : category.currentValue / dashboard.metrics.currentValue;
+
+                return (
+                  <div className="allocation-item" key={category.category}>
+                    <span
+                      className="allocation-swatch"
+                      style={{
+                        backgroundColor:
+                          allocationColors[index % allocationColors.length],
+                      }}
+                    />
+                    <div>
+                      <strong>{category.category}</strong>
+                      <p>
+                        {formatInrFull(category.currentValue)} · {formatPercent(share)}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {workbookConfigured ? (
+        <section className="wide-grid">
+          <NavHistoryChart transactions={dashboard.transactions} funds={dashboard.funds} />
+        </section>
+      ) : null}
+
+      <section className="panel table-panel">
+        <div className="panel-heading">
+          <div>
+            <p className="eyebrow">Holdings</p>
+            <h2>Fund summary</h2>
+          </div>
+          <p className="muted">
+            Purchase value is recalculated from the transaction history, and current
+            value uses the latest NAV for the remaining units.
+          </p>
+        </div>
+
+        <div className="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Fund</th>
+                <th>Category</th>
+                <th>Purchase Value</th>
+                <th>Current Value</th>
+                <th>Profit or Loss</th>
+                <th>Return</th>
+              </tr>
+            </thead>
+            <tbody>
+              {dashboard.fundSummaries.map((fund) => (
+                <tr key={fund.fundId}>
+                  <td>
+                    <strong>{fund.name}</strong>
+                    <span className="subtle-line">Folio {fund.folioNumber}</span>
+                  </td>
+                  <td>{fund.category}</td>
+                  <td className="numeric-cell">{formatInrFull(fund.totalInvested)}</td>
+                  <td className="numeric-cell">{formatInrFull(fund.currentValue)}</td>
+                  <td
+                    className={`numeric-cell ${
+                      fund.profitLoss >= 0 ? "text-positive" : "text-negative"
+                    }`}
+                  >
+                    {formatInrFull(fund.profitLoss)}
+                  </td>
+                  <td
+                    className={`numeric-cell ${
+                      fund.absoluteReturn >= 0 ? "text-positive" : "text-negative"
+                    }`}
+                  >
+                    {formatPercent(fund.absoluteReturn)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      {workbookConfigured ? (
+        <TransactionHistoryTable
+          transactions={dashboard.transactions}
+          funds={dashboard.funds}
+        />
+      ) : null}
+    </main>
+  );
+}
+
+function MetricCard({
+  label,
+  value,
+  detail,
+  tone = "neutral",
+}: {
+  label: string;
+  value: string;
+  detail?: string;
+  tone?: "neutral" | "positive" | "negative";
+}) {
+  return (
+    <article className={`metric-card metric-${tone}`}>
+      <p>{label}</p>
+      <h2>{value}</h2>
+      {detail ? <span className="metric-detail">{detail}</span> : null}
+    </article>
+  );
+}
+
+function formatInrFull(value: number) {
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
+function formatInrCompact(value: number) {
+  const absoluteValue = Math.abs(value);
+  if (absoluteValue >= 10000000) {
+    return `₹${(value / 10000000).toFixed(2)} crore`;
+  }
+  if (absoluteValue >= 100000) {
+    return `₹${(value / 100000).toFixed(2)} lakh`;
+  }
+  if (absoluteValue >= 1000) {
+    return `₹${(value / 1000).toFixed(1)}k`;
+  }
+  return formatInrFull(value);
+}
+
+function formatAxisLakhs(value: number) {
+  if (Math.abs(value) >= 100000) {
+    return `${(value / 100000).toFixed(1)}L`;
+  }
+  if (Math.abs(value) >= 1000) {
+    return `${Math.round(value / 1000)}k`;
+  }
+  return String(Math.round(value));
+}
+
+function formatPercent(value: number) {
+  return new Intl.NumberFormat("en-IN", {
+    style: "percent",
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  }).format(value);
+}
+
+function formatChartTopLabel(value: number) {
+  if (Math.abs(value) >= 100000) {
+    return `₹${(value / 100000).toFixed(1)}L`;
+  }
+  if (Math.abs(value) >= 1000) {
+    return `₹${Math.round(value / 1000)}k`;
+  }
+  return `₹${Math.round(value)}`;
+}
+
+function formatAllocationLabel(value: number) {
+  if (value < 0.05) {
+    return "";
+  }
+
+  return formatPercent(value);
+}
+
+function renderAllocationOutsidePercentLabel(props: {
+  cx?: number;
+  cy?: number;
+  midAngle?: number;
+  innerRadius?: number;
+  outerRadius?: number;
+  percent?: number;
+}) {
+  const {
+    cx = 0,
+    cy = 0,
+    midAngle = 0,
+    innerRadius = 0,
+    outerRadius = 0,
+    percent = 0,
+  } = props;
+
+  const label = formatAllocationLabel(percent);
+  if (!label) {
+    return null;
+  }
+
+  const radius = outerRadius + 18;
+  const x = cx + radius * Math.cos(-midAngle * RADIAN);
+  const y = cy + radius * Math.sin(-midAngle * RADIAN);
+
+  return (
+    <text
+      x={x}
+      y={y}
+      textAnchor={x > cx ? "start" : "end"}
+      dominantBaseline="central"
+      style={{
+        fill: "var(--text)",
+        fontSize: 13,
+        fontWeight: 700,
+        pointerEvents: "none",
+      }}
+    >
+      {label}
+    </text>
+  );
+}
+
+function renderFundTick(props: {
+  x?: number;
+  y?: number;
+  payload?: { value?: string };
+}) {
+  const { x = 0, y = 0, payload } = props;
+  const value = payload?.value ?? "";
+  const [firstLine, secondLine] = splitFundLabel(value);
+
+  return (
+    <g transform={`translate(${x},${y})`}>
+      <text
+        x={0}
+        y={0}
+        dy={12}
+        textAnchor="end"
+        fill="var(--muted)"
+        fontSize={12}
+        transform="rotate(-45)"
+      >
+        <tspan x={0} dy={0}>
+          {firstLine}
+        </tspan>
+        {secondLine ? (
+          <tspan x={0} dy={14}>
+            {secondLine}
+          </tspan>
+        ) : null}
+      </text>
+    </g>
+  );
+}
+
+function splitFundLabel(name: string) {
+  const words = name.split(" ");
+  if (words.length <= 2) {
+    return [name, ""] as const;
+  }
+
+  const maxLineLength = 18;
+  let firstLineWords: string[] = [];
+  let secondLineWords: string[] = [];
+
+  for (const word of words) {
+    if (secondLineWords.length > 0) {
+      secondLineWords.push(word);
+      continue;
+    }
+
+    const candidate = [...firstLineWords, word].join(" ");
+    if (candidate.length <= maxLineLength || firstLineWords.length === 0) {
+      firstLineWords.push(word);
+      continue;
+    }
+
+    secondLineWords = [word];
+  }
+
+  if (secondLineWords.length === 0) {
+    const midpoint = Math.ceil(words.length / 2);
+    firstLineWords = words.slice(0, midpoint);
+    secondLineWords = words.slice(midpoint);
+  }
+
+  return [firstLineWords.join(" "), secondLineWords.join(" ")] as const;
+}
+
+function formatPeriodTick(value: string) {
+  const date = new Date(`${value}-01T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("en-IN", {
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(date);
+}
+
+function formatPeriodLabel(value: string) {
+  const date = new Date(`${value}-01T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("en-IN", {
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(date);
+}

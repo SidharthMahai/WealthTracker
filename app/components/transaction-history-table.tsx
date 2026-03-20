@@ -1,0 +1,560 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import type { FundOption, TransactionRecord } from "@/lib/types";
+
+type TransactionHistoryTableProps = {
+  transactions: TransactionRecord[];
+  funds: FundOption[];
+};
+
+type EditableTransaction = {
+  transactionDate: string;
+  fundId: string;
+  transactionType: string;
+  direction: "Contribution" | "Redemption";
+  amountInvested: string;
+  units: string;
+  nav: string;
+};
+
+type FundFilterOption = {
+  fundId: string;
+  fundName: string;
+};
+
+export function TransactionHistoryTable({
+  transactions,
+  funds,
+}: TransactionHistoryTableProps) {
+  const router = useRouter();
+  const [search, setSearch] = useState("");
+  const [fundFilter, setFundFilter] = useState("all");
+  const [yearFilter, setYearFilter] = useState("all");
+  const [directionFilter, setDirectionFilter] = useState("all");
+  const [editingRowId, setEditingRowId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<EditableTransaction | null>(null);
+  const [busyRowId, setBusyRowId] = useState<string | null>(null);
+  const [error, setError] = useState("");
+
+  const fundOptions = useMemo(() => {
+    const optionMap = new Map<string, FundFilterOption>();
+
+    for (const transaction of transactions) {
+      if (!optionMap.has(transaction.fundName)) {
+        optionMap.set(transaction.fundName, {
+          fundId: transaction.fundId,
+          fundName: transaction.fundName,
+        });
+      }
+    }
+
+    return Array.from(optionMap.values()).sort((left, right) =>
+      left.fundName.localeCompare(right.fundName)
+    );
+  }, [transactions]);
+
+  const yearOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(transactions.map((transaction) => transaction.financialYear.trim()))
+      ).sort((left, right) => right.localeCompare(left)),
+    [transactions]
+  );
+
+  const filteredTransactions = useMemo(() => {
+    const normalizedSearch = normalizeValue(search);
+
+    return transactions.filter((transaction) => {
+      const sameFund =
+        fundFilter === "all" || transaction.fundName === fundFilter;
+      const sameYear =
+        yearFilter === "all" || transaction.financialYear.trim() === yearFilter;
+      const sameDirection =
+        directionFilter === "all" || transaction.direction === directionFilter;
+
+      if (!sameFund || !sameYear || !sameDirection) {
+        return false;
+      }
+
+      if (!normalizedSearch) {
+        return true;
+      }
+
+      const searchText = [
+        transaction.entryId,
+        transaction.transactionDate,
+        transaction.financialYear,
+        transaction.fundName,
+        transaction.transactionType,
+        transaction.direction,
+        transaction.folioNumber,
+      ]
+        .join(" ")
+        .toLowerCase();
+
+      return searchText.includes(normalizedSearch);
+    });
+  }, [directionFilter, fundFilter, search, transactions, yearFilter]);
+
+  const totals = useMemo(
+    () =>
+      filteredTransactions.reduce(
+        (accumulator, transaction) => {
+          const sign = transaction.direction === "Redemption" ? -1 : 1;
+          accumulator.amount += sign * transaction.normalizedAmount;
+          accumulator.units += sign * transaction.units;
+          accumulator.contributions +=
+            transaction.direction === "Contribution"
+              ? transaction.normalizedAmount
+              : 0;
+          accumulator.redemptions +=
+            transaction.direction === "Redemption" ? transaction.normalizedAmount : 0;
+          accumulator.rows += 1;
+          return accumulator;
+        },
+        { amount: 0, units: 0, contributions: 0, redemptions: 0, rows: 0 }
+      ),
+    [filteredTransactions]
+  );
+
+  function beginEdit(transaction: TransactionRecord) {
+    setError("");
+    setEditingRowId(transaction.rowId);
+    setDraft({
+      transactionDate: transaction.transactionDate,
+      fundId: transaction.fundId,
+      transactionType: transaction.transactionType || "Manual Entry",
+      direction: transaction.direction,
+      amountInvested: String(transaction.normalizedAmount || ""),
+      units: transaction.units ? String(transaction.units) : "",
+      nav: transaction.nav ? String(transaction.nav) : "",
+    });
+  }
+
+  function cancelEdit() {
+    setEditingRowId(null);
+    setDraft(null);
+    setError("");
+  }
+
+  function updateDraft(field: keyof EditableTransaction, value: string) {
+    setDraft((current) => (current ? { ...current, [field]: value } : current));
+  }
+
+  async function saveEdit(rowId: string) {
+    if (!draft) {
+      return;
+    }
+
+    setBusyRowId(rowId);
+    setError("");
+
+    try {
+      const response = await fetch("/api/transactions", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          rowId,
+          transaction: {
+            transactionDate: draft.transactionDate,
+            fundId: draft.fundId,
+            transactionType: draft.transactionType,
+            direction: draft.direction,
+            amountInvested: Number(draft.amountInvested),
+            units: draft.units ? Number(draft.units) : undefined,
+            nav: draft.nav ? Number(draft.nav) : undefined,
+          },
+        }),
+      });
+
+      const payload = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Unable to update the transaction.");
+      }
+
+      cancelEdit();
+      router.refresh();
+    } catch (saveError) {
+      setError(
+        saveError instanceof Error
+          ? saveError.message
+          : "Unable to update the transaction."
+      );
+    } finally {
+      setBusyRowId(null);
+    }
+  }
+
+  async function removeTransaction(rowId: string) {
+    if (!window.confirm("Delete this transaction from the workbook?")) {
+      return;
+    }
+
+    setBusyRowId(rowId);
+    setError("");
+
+    try {
+      const response = await fetch(
+        `/api/transactions?rowId=${encodeURIComponent(rowId)}`,
+        { method: "DELETE" }
+      );
+
+      const payload = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Unable to delete the transaction.");
+      }
+
+      if (editingRowId === rowId) {
+        cancelEdit();
+      }
+      router.refresh();
+    } catch (deleteError) {
+      setError(
+        deleteError instanceof Error
+          ? deleteError.message
+          : "Unable to delete the transaction."
+      );
+    } finally {
+      setBusyRowId(null);
+    }
+  }
+
+  function resetFilters() {
+    setSearch("");
+    setFundFilter("all");
+    setYearFilter("all");
+    setDirectionFilter("all");
+  }
+
+  return (
+    <section className="panel table-panel">
+      <div className="panel-heading">
+        <div>
+          <p className="eyebrow">History</p>
+          <h2>Transaction history</h2>
+        </div>
+        <p className="muted">
+          Exact filters apply to the visible transactions only, and the totals update with
+          them.
+        </p>
+      </div>
+
+      <div className="filter-grid">
+        <label>
+          <span>Search</span>
+          <input
+            type="text"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Find by fund, type, folio, id or date..."
+          />
+        </label>
+
+        <label>
+          <span>Fund</span>
+          <select
+            value={fundFilter}
+            onChange={(event) => setFundFilter(event.target.value)}
+          >
+            <option value="all">All funds</option>
+            {fundOptions.map((fund) => (
+              <option key={fund.fundId} value={fund.fundName}>
+                {fund.fundName}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label>
+          <span>Financial Year</span>
+          <select
+            value={yearFilter}
+            onChange={(event) => setYearFilter(event.target.value)}
+          >
+            <option value="all">All years</option>
+            {yearOptions.map((year) => (
+              <option key={year} value={year}>
+                {year}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label>
+          <span>Direction</span>
+          <select
+            value={directionFilter}
+            onChange={(event) => setDirectionFilter(event.target.value)}
+          >
+            <option value="all">All</option>
+            <option value="Contribution">Contribution</option>
+            <option value="Redemption">Redemption</option>
+          </select>
+        </label>
+      </div>
+
+      <div className="history-summary">
+        <div className="history-chip">
+          <strong>{totals.rows}</strong>
+          <span>visible transactions</span>
+        </div>
+        <div className="history-chip">
+          <strong>{formatInrFull(totals.contributions)}</strong>
+          <span>filtered contributions</span>
+        </div>
+        <div className="history-chip">
+          <strong>{formatInrFull(totals.redemptions)}</strong>
+          <span>filtered redemptions</span>
+        </div>
+        <div className="history-chip">
+          <strong>{formatUnits(totals.units)}</strong>
+          <span>filtered units</span>
+        </div>
+        <button type="button" className="secondary-button" onClick={resetFilters}>
+          Reset filters
+        </button>
+      </div>
+
+      {error ? <p className="error-text">{error}</p> : null}
+
+      <div className="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>FY</th>
+              <th>Fund</th>
+              <th>Type</th>
+              <th>Direction</th>
+              <th>Amount</th>
+              <th>Units</th>
+              <th>NAV</th>
+              <th>Folio</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody key={`${search}|${fundFilter}|${yearFilter}|${directionFilter}`}>
+            {filteredTransactions.length === 0 ? (
+              <tr>
+                <td colSpan={10}>No transactions match these filters.</td>
+              </tr>
+            ) : null}
+
+            {filteredTransactions.map((transaction) => {
+              const isEditing = editingRowId === transaction.rowId && draft;
+              const signedAmount =
+                transaction.direction === "Redemption"
+                  ? -transaction.normalizedAmount
+                  : transaction.normalizedAmount;
+              const signedUnits =
+                transaction.direction === "Redemption"
+                  ? -transaction.units
+                  : transaction.units;
+
+              if (isEditing) {
+                return (
+                  <tr key={transaction.rowId}>
+                    <td className="numeric-cell">
+                      <input
+                        type="date"
+                        value={draft.transactionDate}
+                        onChange={(event) =>
+                          updateDraft("transactionDate", event.target.value)
+                        }
+                      />
+                    </td>
+                    <td className="numeric-cell">
+                      {getFinancialYearLabel(draft.transactionDate)}
+                    </td>
+                    <td>
+                      <select
+                        value={draft.fundId}
+                        onChange={(event) => updateDraft("fundId", event.target.value)}
+                      >
+                        {funds.map((fund) => (
+                          <option key={fund.fundId} value={fund.fundId}>
+                            {fund.name}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td>
+                      <input
+                        type="text"
+                        value={draft.transactionType}
+                        onChange={(event) =>
+                          updateDraft("transactionType", event.target.value)
+                        }
+                      />
+                    </td>
+                    <td>
+                      <select
+                        value={draft.direction}
+                        onChange={(event) =>
+                          updateDraft(
+                            "direction",
+                            event.target.value as EditableTransaction["direction"]
+                          )
+                        }
+                      >
+                        <option value="Contribution">Contribution</option>
+                        <option value="Redemption">Redemption</option>
+                      </select>
+                    </td>
+                    <td className="numeric-cell">
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={draft.amountInvested}
+                        onChange={(event) =>
+                          updateDraft("amountInvested", event.target.value)
+                        }
+                      />
+                    </td>
+                    <td className="numeric-cell">
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.0001"
+                        value={draft.units}
+                        onChange={(event) => updateDraft("units", event.target.value)}
+                      />
+                    </td>
+                    <td className="numeric-cell">
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.0001"
+                        value={draft.nav}
+                        onChange={(event) => updateDraft("nav", event.target.value)}
+                      />
+                    </td>
+                    <td className="numeric-cell">{transaction.folioNumber}</td>
+                    <td className="actions-cell">
+                      <button
+                        type="button"
+                        className="link-button"
+                        disabled={busyRowId === transaction.rowId}
+                        onClick={() => saveEdit(transaction.rowId)}
+                      >
+                        Save
+                      </button>
+                      <button
+                        type="button"
+                        className="link-button"
+                        disabled={busyRowId === transaction.rowId}
+                        onClick={cancelEdit}
+                      >
+                        Cancel
+                      </button>
+                    </td>
+                  </tr>
+                );
+              }
+
+              return (
+                <tr key={transaction.rowId}>
+                  <td className="numeric-cell">{transaction.transactionDate}</td>
+                  <td className="numeric-cell">{transaction.financialYear}</td>
+                  <td>{transaction.fundName}</td>
+                  <td>{transaction.transactionType}</td>
+                  <td>{transaction.direction}</td>
+                  <td
+                    className={`numeric-cell ${
+                      signedAmount >= 0 ? "text-positive" : "text-negative"
+                    }`}
+                  >
+                    {formatInrFull(signedAmount)}
+                  </td>
+                  <td className="numeric-cell">{formatUnits(signedUnits)}</td>
+                  <td className="numeric-cell">{formatNav(transaction.nav)}</td>
+                  <td className="numeric-cell">{transaction.folioNumber}</td>
+                  <td className="actions-cell">
+                    <button
+                      type="button"
+                      className="link-button"
+                      disabled={busyRowId === transaction.rowId}
+                      onClick={() => beginEdit(transaction)}
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      className="link-button danger-button"
+                      disabled={busyRowId === transaction.rowId}
+                      onClick={() => removeTransaction(transaction.rowId)}
+                    >
+                      Delete
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td colSpan={5}>
+                <strong>Filtered totals (net invested)</strong>
+              </td>
+              <td className="numeric-cell">
+                <strong>{formatInrFull(totals.amount)}</strong>
+              </td>
+              <td className="numeric-cell">
+                <strong>{formatUnits(totals.units)}</strong>
+              </td>
+              <td className="numeric-cell">—</td>
+              <td className="numeric-cell">—</td>
+              <td className="numeric-cell">
+                <strong>{totals.rows} transactions</strong>
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function formatInrFull(value: number) {
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
+function formatUnits(value: number) {
+  return new Intl.NumberFormat("en-IN", {
+    maximumFractionDigits: 3,
+    minimumFractionDigits: 0,
+  }).format(value);
+}
+
+function formatNav(value: number) {
+  return new Intl.NumberFormat("en-IN", {
+    maximumFractionDigits: 4,
+    minimumFractionDigits: 0,
+  }).format(value);
+}
+
+function normalizeValue(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function getFinancialYearLabel(dateString: string) {
+  const date = new Date(`${dateString}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) {
+    return "—";
+  }
+
+  const year = date.getUTCFullYear();
+  const month = date.getUTCMonth();
+  const startYear = month >= 3 ? year : year - 1;
+  const endYear = String(startYear + 1).slice(-2);
+  return `${startYear}-${endYear}`;
+}
