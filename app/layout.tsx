@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "My Investment Tracker",
-  description: "Personal investment dashboard for workbook-backed purchases, values, and entries.",
+  description: "Personal investment dashboard for workbook-backed purchases, values, & entries.",
 };
 
 export default function RootLayout({
