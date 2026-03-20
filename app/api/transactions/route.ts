@@ -2,17 +2,23 @@ import { NextResponse } from "next/server";
 import {
   addTransaction,
   deleteTransaction,
+  getDashboardData,
   updateTransaction,
 } from "@/lib/portfolio";
 import type { NewTransactionInput } from "@/lib/types";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
   try {
     const payload = await request.json();
     const result = await addTransaction(payload);
-    return NextResponse.json(result, { status: 201 });
+    const dashboard = await getDashboardData();
+    return NextResponse.json(
+      { ok: true, ...result, dashboard },
+      { status: 201, headers: { "Cache-Control": "no-store" } }
+    );
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Failed to save investment entry.";
@@ -38,7 +44,11 @@ export async function PATCH(request: Request) {
       payload.rowId,
       payload.transaction as NewTransactionInput
     );
-    return NextResponse.json(result);
+    const dashboard = await getDashboardData();
+    return NextResponse.json(
+      { ok: true, ...result, dashboard },
+      { headers: { "Cache-Control": "no-store" } }
+    );
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Failed to update transaction.";
@@ -59,7 +69,11 @@ export async function DELETE(request: Request) {
     }
 
     const result = await deleteTransaction(rowId);
-    return NextResponse.json(result);
+    const dashboard = await getDashboardData();
+    return NextResponse.json(
+      { ok: true, ...result, dashboard },
+      { headers: { "Cache-Control": "no-store" } }
+    );
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Failed to delete transaction.";

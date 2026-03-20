@@ -1,14 +1,19 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { FundOption } from "@/lib/types";
+import type { DashboardData, FundOption } from "@/lib/types";
 
 type AddInvestmentFormProps = {
   funds: FundOption[];
   onSaved?: () => Promise<boolean | void> | boolean | void;
+  onDashboardUpdated?: (dashboard: DashboardData) => void;
 };
 
-export function AddInvestmentForm({ funds, onSaved }: AddInvestmentFormProps) {
+export function AddInvestmentForm({
+  funds,
+  onSaved,
+  onDashboardUpdated,
+}: AddInvestmentFormProps) {
   const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
   const [form, setForm] = useState({
     transactionDate: today,
@@ -30,6 +35,7 @@ export function AddInvestmentForm({ funds, onSaved }: AddInvestmentFormProps) {
     try {
       const response = await fetch("/api/transactions", {
         method: "POST",
+        credentials: "include",
         headers: {
           "Content-Type": "application/json",
         },
@@ -41,7 +47,11 @@ export function AddInvestmentForm({ funds, onSaved }: AddInvestmentFormProps) {
         }),
       });
 
-      const payload = (await response.json()) as { error?: string };
+      const payload = (await response.json()) as {
+        ok?: boolean;
+        error?: string;
+        dashboard?: DashboardData;
+      };
       if (!response.ok) {
         throw new Error(payload.error ?? "Unable to save the investment.");
       }
@@ -52,13 +62,18 @@ export function AddInvestmentForm({ funds, onSaved }: AddInvestmentFormProps) {
         units: "",
         nav: "",
       }));
-      setNotice("Saved. Updating dashboard…");
-      const refreshed = await onSaved?.();
-      setNotice(
-        refreshed === false
-          ? "Saved, but the dashboard didn't refresh (try again)."
-          : "Saved."
-      );
+      if (payload.dashboard) {
+        onDashboardUpdated?.(payload.dashboard);
+        setNotice("Saved.");
+      } else {
+        setNotice("Saved. Updating dashboard…");
+        const refreshed = await onSaved?.();
+        setNotice(
+          refreshed === false
+            ? "Saved, but the dashboard didn't refresh (try again)."
+            : "Saved."
+        );
+      }
     } catch (submissionError) {
       setError(
         submissionError instanceof Error
@@ -156,7 +171,7 @@ export function AddInvestmentForm({ funds, onSaved }: AddInvestmentFormProps) {
         {error ? <p className="error-text">{error}</p> : null}
         {!error && notice ? <p className="muted">{notice}</p> : null}
         <button type="submit" disabled={isSubmitting || !funds.length}>
-          {isSubmitting ? "Saving..." : "Save new entry"}
+          Save new entry
         </button>
       </div>
     </form>

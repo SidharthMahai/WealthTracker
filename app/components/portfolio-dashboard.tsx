@@ -44,6 +44,10 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
   const [theme, setTheme] = useState<"light" | "dark">("light");
 
   useEffect(() => {
+    setCurrentDashboard(dashboard);
+  }, [dashboard]);
+
+  useEffect(() => {
     const storedTheme = window.localStorage.getItem("investment-theme");
     const preferredTheme =
       storedTheme === "light" || storedTheme === "dark"
@@ -63,7 +67,7 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
   async function fetchDashboardSnapshot(): Promise<DashboardData> {
     const response = await fetch(`/api/dashboard?ts=${Date.now()}`, {
       cache: "no-store",
-      credentials: "same-origin",
+      credentials: "include",
       headers: {
         Accept: "application/json",
         "Cache-Control": "no-cache",
@@ -114,6 +118,11 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
 
   const workbookConfigured =
     currentDashboard.workbookName !== "No workbook configured";
+
+  function applyDashboardUpdate(next: DashboardData) {
+    setCurrentDashboard(next);
+    setLastUpdatedAt(Date.now());
+  }
 
   return (
     <main className="page-shell">
@@ -385,6 +394,7 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
           <AddInvestmentForm
             funds={currentDashboard.funds}
             onSaved={refreshDashboard}
+            onDashboardUpdated={applyDashboardUpdate}
           />
         ) : null}
       </section>
@@ -575,6 +585,7 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
           transactions={currentDashboard.transactions}
           funds={currentDashboard.funds}
           onChanged={refreshDashboard}
+          onDashboardUpdated={applyDashboardUpdate}
         />
       ) : null}
     </main>

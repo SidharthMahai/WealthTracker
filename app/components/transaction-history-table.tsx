@@ -1,12 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { FundOption, TransactionRecord } from "@/lib/types";
+import type { DashboardData, FundOption, TransactionRecord } from "@/lib/types";
 
 type TransactionHistoryTableProps = {
   transactions: TransactionRecord[];
   funds: FundOption[];
   onChanged?: () => Promise<boolean | void> | boolean | void;
+  onDashboardUpdated?: (dashboard: DashboardData) => void;
 };
 
 type EditableTransaction = {
@@ -28,10 +29,12 @@ export function TransactionHistoryTable({
   transactions,
   funds,
   onChanged,
+  onDashboardUpdated,
 }: TransactionHistoryTableProps) {
   const [search, setSearch] = useState("");
   const [fundFilter, setFundFilter] = useState("all");
   const [yearFilter, setYearFilter] = useState("all");
+  const [monthFilter, setMonthFilter] = useState("all");
   const [directionFilter, setDirectionFilter] = useState("all");
   const [editingRowId, setEditingRowId] = useState<string | null>(null);
   const [draft, setDraft] = useState<EditableTransaction | null>(null);
@@ -64,6 +67,19 @@ export function TransactionHistoryTable({
     [transactions]
   );
 
+  const monthOptions = useMemo(() => {
+    const monthKeys = new Set<string>();
+
+    for (const transaction of transactions) {
+      const key = getMonthKey(transaction.transactionDate);
+      if (key) {
+        monthKeys.add(key);
+      }
+    }
+
+    return Array.from(monthKeys).sort((left, right) => right.localeCompare(left));
+  }, [transactions]);
+
   const filteredTransactions = useMemo(() => {
     const normalizedSearch = normalizeValue(search);
 
@@ -72,10 +88,13 @@ export function TransactionHistoryTable({
         fundFilter === "all" || transaction.fundName === fundFilter;
       const sameYear =
         yearFilter === "all" || transaction.financialYear.trim() === yearFilter;
+      const sameMonth =
+        monthFilter === "all" ||
+        getMonthKey(transaction.transactionDate) === monthFilter;
       const sameDirection =
         directionFilter === "all" || transaction.direction === directionFilter;
 
-      if (!sameFund || !sameYear || !sameDirection) {
+      if (!sameFund || !sameYear || !sameMonth || !sameDirection) {
         return false;
       }
 
@@ -97,7 +116,7 @@ export function TransactionHistoryTable({
 
       return searchText.includes(normalizedSearch);
     });
-  }, [directionFilter, fundFilter, search, transactions, yearFilter]);
+  }, [directionFilter, fundFilter, monthFilter, search, transactions, yearFilter]);
 
   const totals = useMemo(
     () =>
@@ -158,6 +177,7 @@ export function TransactionHistoryTable({
     try {
       const response = await fetch("/api/transactions", {
         method: "PATCH",
+        credentials: "include",
         headers: {
           "Content-Type": "application/json",
         },
@@ -175,19 +195,28 @@ export function TransactionHistoryTable({
         }),
       });
 
-      const payload = (await response.json()) as { error?: string };
+      const payload = (await response.json()) as {
+        ok?: boolean;
+        error?: string;
+        dashboard?: DashboardData;
+      };
       if (!response.ok) {
         throw new Error(payload.error ?? "Unable to update the transaction.");
       }
 
       cancelEdit();
-      setNotice("Saved. Updating dashboard…");
-      const refreshed = await onChanged?.();
-      setNotice(
-        refreshed === false
-          ? "Saved, but the dashboard didn't refresh (try again)."
-          : "Saved."
-      );
+      if (payload.dashboard) {
+        onDashboardUpdated?.(payload.dashboard);
+        setNotice("Saved.");
+      } else {
+        setNotice("Saved. Updating dashboard…");
+        const refreshed = await onChanged?.();
+        setNotice(
+          refreshed === false
+            ? "Saved, but the dashboard didn't refresh (try again)."
+            : "Saved."
+        );
+      }
     } catch (saveError) {
       setError(
         saveError instanceof Error
@@ -212,10 +241,14 @@ export function TransactionHistoryTable({
     try {
       const response = await fetch(
         `/api/transactions?rowId=${encodeURIComponent(rowId)}`,
-        { method: "DELETE" }
+        { method: "DELETE", credentials: "include" }
       );
 
-      const payload = (await response.json()) as { error?: string };
+      const payload = (await response.json()) as {
+        ok?: boolean;
+        error?: string;
+        dashboard?: DashboardData;
+      };
       if (!response.ok) {
         throw new Error(payload.error ?? "Unable to delete the transaction.");
       }
@@ -223,13 +256,18 @@ export function TransactionHistoryTable({
       if (editingRowId === rowId) {
         cancelEdit();
       }
-      setNotice("Deleted. Updating dashboard…");
-      const refreshed = await onChanged?.();
-      setNotice(
-        refreshed === false
-          ? "Deleted, but the dashboard didn't refresh (try again)."
-          : "Deleted."
-      );
+      if (payload.dashboard) {
+        onDashboardUpdated?.(payload.dashboard);
+        setNotice("Deleted.");
+      } else {
+        setNotice("Deleted. Updating dashboard…");
+        const refreshed = await onChanged?.();
+        setNotice(
+          refreshed === false
+            ? "Deleted, but the dashboard didn't refresh (try again)."
+            : "Deleted."
+        );
+      }
     } catch (deleteError) {
       setError(
         deleteError instanceof Error
@@ -246,6 +284,7 @@ export function TransactionHistoryTable({
     setSearch("");
     setFundFilter("all");
     setYearFilter("all");
+    setMonthFilter("all");
     setDirectionFilter("all");
   }
 
@@ -304,6 +343,21 @@ export function TransactionHistoryTable({
         </label>
 
         <label>
+          <span>Month</span>
+          <select
+            value={monthFilter}
+            onChange={(event) => setMonthFilter(event.target.value)}
+          >
+            <option value="all">All months</option>
+            {monthOptions.map((monthKey) => (
+              <option key={monthKey} value={monthKey}>
+                {formatMonthLabel(monthKey)}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label>
           <span>Direction</span>
           <select
             value={directionFilter}
@@ -346,6 +400,7 @@ export function TransactionHistoryTable({
           <thead>
             <tr>
               <th>Date</th>
+              <th>Month</th>
               <th>FY</th>
               <th>Fund</th>
               <th>Type</th>
@@ -357,10 +412,10 @@ export function TransactionHistoryTable({
               <th>Actions</th>
             </tr>
           </thead>
-          <tbody key={`${search}|${fundFilter}|${yearFilter}|${directionFilter}`}>
+          <tbody key={`${search}|${fundFilter}|${yearFilter}|${monthFilter}|${directionFilter}`}>
             {filteredTransactions.length === 0 ? (
               <tr>
-                <td colSpan={10}>No transactions match these filters.</td>
+                <td colSpan={11}>No transactions match these filters.</td>
               </tr>
             ) : null}
 
@@ -386,6 +441,9 @@ export function TransactionHistoryTable({
                           updateDraft("transactionDate", event.target.value)
                         }
                       />
+                    </td>
+                    <td className="numeric-cell">
+                      {formatMonthLabel(getMonthKey(draft.transactionDate) ?? "") || "—"}
                     </td>
                     <td className="numeric-cell">
                       {getFinancialYearLabel(draft.transactionDate)}
@@ -479,7 +537,13 @@ export function TransactionHistoryTable({
 
               return (
                 <tr key={transaction.rowId}>
-                  <td className="numeric-cell">{transaction.transactionDate}</td>
+                  <td className="numeric-cell">
+                    {formatFriendlyDate(transaction.transactionDate)}
+                  </td>
+                  <td className="numeric-cell">
+                    {formatMonthLabel(getMonthKey(transaction.transactionDate) ?? "") ||
+                      "—"}
+                  </td>
                   <td className="numeric-cell">{transaction.financialYear}</td>
                   <td>{transaction.fundName}</td>
                   <td>{transaction.transactionType}</td>
@@ -518,7 +582,7 @@ export function TransactionHistoryTable({
           </tbody>
           <tfoot>
             <tr>
-              <td colSpan={5}>
+              <td colSpan={6}>
                 <strong>Filtered totals (net invested)</strong>
               </td>
               <td className="numeric-cell">
@@ -577,4 +641,50 @@ function getFinancialYearLabel(dateString: string) {
   const startYear = month >= 3 ? year : year - 1;
   const endYear = String(startYear + 1).slice(-2);
   return `${startYear}-${endYear}`;
+}
+
+function getMonthKey(dateString: string) {
+  const match = dateString.match(/^(\d{4})-(\d{2})-\d{2}$/);
+  if (!match) {
+    return null;
+  }
+
+  const month = Number(match[2]);
+  if (!Number.isFinite(month) || month < 1 || month > 12) {
+    return null;
+  }
+
+  return `${match[1]}-${match[2]}`;
+}
+
+function formatMonthLabel(monthKey: string) {
+  const match = monthKey.match(/^(\d{4})-(\d{2})$/);
+  if (!match) {
+    return "";
+  }
+
+  const date = new Date(`${match[1]}-${match[2]}-01T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return new Intl.DateTimeFormat("en-IN", {
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(date);
+}
+
+function formatFriendlyDate(dateString: string) {
+  const date = new Date(`${dateString}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) {
+    return dateString;
+  }
+
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(date);
 }
