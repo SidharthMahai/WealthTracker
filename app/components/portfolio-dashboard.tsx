@@ -37,6 +37,9 @@ const allocationColors = [
 const RADIAN = Math.PI / 180;
 
 export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
+  const [currentDashboard, setCurrentDashboard] = useState(dashboard);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshError, setRefreshError] = useState("");
   const [theme, setTheme] = useState<"light" | "dark">("light");
 
   useEffect(() => {
@@ -56,12 +59,38 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
     window.localStorage.setItem("investment-theme", theme);
   }, [theme]);
 
+  async function refreshDashboard(): Promise<boolean> {
+    setRefreshing(true);
+    setRefreshError("");
+
+    try {
+      const response = await fetch("/api/dashboard", { cache: "no-store" });
+      if (!response.ok) {
+        throw new Error("Could not refresh the dashboard data.");
+      }
+
+      const payload = (await response.json()) as DashboardData;
+      setCurrentDashboard(payload);
+      return true;
+    } catch (error) {
+      setRefreshError(
+        error instanceof Error
+          ? error.message
+          : "Could not refresh the dashboard data."
+      );
+      return false;
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
   const fundChartWidth = useMemo(
-    () => Math.max(1760, dashboard.fundChart.length * 200),
-    [dashboard.fundChart.length]
+    () => Math.max(1760, currentDashboard.fundChart.length * 200),
+    [currentDashboard.fundChart.length]
   );
 
-  const workbookConfigured = dashboard.workbookName !== "No workbook configured";
+  const workbookConfigured =
+    currentDashboard.workbookName !== "No workbook configured";
 
   return (
     <main className="page-shell">
@@ -73,13 +102,15 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
             This is a personal dashboard for my own investments, with INR-first
             numbers, rounded purchase amounts, and clear units and NAV tracking.
           </p>
+          {refreshing ? <p className="muted">Updating…</p> : null}
+          {refreshError ? <p className="error-text">{refreshError}</p> : null}
         </div>
 
         <div className="hero-card">
           <div className="hero-card-row">
             <div>
               <p className="muted">Workbook</p>
-              <h2>{dashboard.workbookName}</h2>
+              <h2>{currentDashboard.workbookName}</h2>
             </div>
             <button
               type="button"
@@ -94,7 +125,7 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
             </button>
           </div>
 
-          <p className="muted hero-path">{dashboard.workbookPath}</p>
+          <p className="muted hero-path">{currentDashboard.workbookPath}</p>
           <div className="workbook-actions">
             <a className="workbook-link" href="/workbook" target="_blank" rel="noreferrer">
               Open workbook viewer
@@ -116,24 +147,24 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
       <section className="metrics-grid">
         <MetricCard
           label="Purchase value"
-          value={formatInrCompact(dashboard.metrics.totalInvested)}
-          detail={formatInrFull(dashboard.metrics.totalInvested)}
+          value={formatInrCompact(currentDashboard.metrics.totalInvested)}
+          detail={formatInrFull(currentDashboard.metrics.totalInvested)}
         />
         <MetricCard
           label="Current value"
-          value={formatInrCompact(dashboard.metrics.currentValue)}
-          detail={formatInrFull(dashboard.metrics.currentValue)}
+          value={formatInrCompact(currentDashboard.metrics.currentValue)}
+          detail={formatInrFull(currentDashboard.metrics.currentValue)}
         />
         <MetricCard
           label="Profit or loss"
-          value={formatInrCompact(dashboard.metrics.profitLoss)}
-          detail={formatInrFull(dashboard.metrics.profitLoss)}
-          tone={dashboard.metrics.profitLoss >= 0 ? "positive" : "negative"}
+          value={formatInrCompact(currentDashboard.metrics.profitLoss)}
+          detail={formatInrFull(currentDashboard.metrics.profitLoss)}
+          tone={currentDashboard.metrics.profitLoss >= 0 ? "positive" : "negative"}
         />
         <MetricCard
           label="Absolute return"
-          value={formatPercent(dashboard.metrics.absoluteReturn)}
-          tone={dashboard.metrics.absoluteReturn >= 0 ? "positive" : "negative"}
+          value={formatPercent(currentDashboard.metrics.absoluteReturn)}
+          tone={currentDashboard.metrics.absoluteReturn >= 0 ? "positive" : "negative"}
         />
       </section>
 
@@ -155,7 +186,7 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
                 id="fund-bar-chart"
                 width={fundChartWidth}
                 height={400}
-                data={dashboard.fundChart}
+                data={currentDashboard.fundChart}
                 margin={{ top: 26, right: 20, left: 8, bottom: 54 }}
                 barCategoryGap={24}
               >
@@ -221,7 +252,7 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
                     formatter={(value: number) => formatChartTopLabel(value)}
                     className="chart-label"
                   />
-                  {dashboard.fundChart.map((fund) => (
+                  {currentDashboard.fundChart.map((fund) => (
                     <Cell
                       key={fund.fundId}
                       fill={fund.currentValue >= fund.invested ? "#57cc99" : "#c44536"}
@@ -245,7 +276,10 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
           </div>
           <div className="chart-frame">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart id="portfolio-flow-chart" data={dashboard.portfolioFlowChart}>
+              <AreaChart
+                id="portfolio-flow-chart"
+                data={currentDashboard.portfolioFlowChart}
+              >
                 <defs>
                   <linearGradient id="purchaseGradient" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#22577a" stopOpacity={0.5} />
@@ -314,7 +348,12 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
           </div>
         </div>
 
-        {workbookConfigured ? <AddInvestmentForm funds={dashboard.funds} /> : null}
+        {workbookConfigured ? (
+          <AddInvestmentForm
+            funds={currentDashboard.funds}
+            onSaved={refreshDashboard}
+          />
+        ) : null}
       </section>
 
       <section className="content-grid">
@@ -328,7 +367,10 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
           </div>
           <div className="chart-frame">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart id="yearly-contrib-chart" data={dashboard.yearlyChart}>
+              <BarChart
+                id="yearly-contrib-chart"
+                data={currentDashboard.yearlyChart}
+              >
                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
                 <XAxis dataKey="financialYear" tickLine={false} axisLine={false} />
                 <YAxis
@@ -379,7 +421,7 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart id="allocation-pie-chart" margin={{ top: 8, right: 28, bottom: 8, left: 28 }}>
                   <Pie
-                    data={dashboard.categoryChart}
+                    data={currentDashboard.categoryChart}
                     isAnimationActive={false}
                     dataKey="currentValue"
                     nameKey="category"
@@ -389,7 +431,7 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
                     labelLine
                     label={renderAllocationOutsidePercentLabel}
                   >
-                    {dashboard.categoryChart.map((entry, index) => (
+                    {currentDashboard.categoryChart.map((entry, index) => (
                       <Cell
                         key={entry.category}
                         fill={allocationColors[index % allocationColors.length]}
@@ -402,11 +444,11 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
             </div>
 
             <div className="allocation-legend">
-              {dashboard.categoryChart.map((category, index) => {
+              {currentDashboard.categoryChart.map((category, index) => {
                 const share =
-                  dashboard.metrics.currentValue === 0
+                  currentDashboard.metrics.currentValue === 0
                     ? 0
-                    : category.currentValue / dashboard.metrics.currentValue;
+                    : category.currentValue / currentDashboard.metrics.currentValue;
 
                 return (
                   <div className="allocation-item" key={category.category}>
@@ -433,7 +475,10 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
 
       {workbookConfigured ? (
         <section className="wide-grid">
-          <NavHistoryChart transactions={dashboard.transactions} funds={dashboard.funds} />
+          <NavHistoryChart
+            transactions={currentDashboard.transactions}
+            funds={currentDashboard.funds}
+          />
         </section>
       ) : null}
 
@@ -462,7 +507,7 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
               </tr>
             </thead>
             <tbody>
-              {dashboard.fundSummaries.map((fund) => (
+              {currentDashboard.fundSummaries.map((fund) => (
                 <tr key={fund.fundId}>
                   <td>
                     <strong>{fund.name}</strong>
@@ -494,8 +539,9 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
 
       {workbookConfigured ? (
         <TransactionHistoryTable
-          transactions={dashboard.transactions}
-          funds={dashboard.funds}
+          transactions={currentDashboard.transactions}
+          funds={currentDashboard.funds}
+          onChanged={refreshDashboard}
         />
       ) : null}
     </main>

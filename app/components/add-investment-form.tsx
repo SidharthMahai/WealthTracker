@@ -1,15 +1,14 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import type { FundOption } from "@/lib/types";
 
 type AddInvestmentFormProps = {
   funds: FundOption[];
+  onSaved?: () => Promise<boolean | void> | boolean | void;
 };
 
-export function AddInvestmentForm({ funds }: AddInvestmentFormProps) {
-  const router = useRouter();
+export function AddInvestmentForm({ funds, onSaved }: AddInvestmentFormProps) {
   const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
   const [form, setForm] = useState({
     transactionDate: today,
@@ -20,11 +19,13 @@ export function AddInvestmentForm({ funds }: AddInvestmentFormProps) {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setIsSubmitting(true);
     setError("");
+    setNotice("Saving…");
 
     try {
       const response = await fetch("/api/transactions", {
@@ -51,13 +52,20 @@ export function AddInvestmentForm({ funds }: AddInvestmentFormProps) {
         units: "",
         nav: "",
       }));
-      router.refresh();
+      setNotice("Saved. Updating dashboard…");
+      const refreshed = await onSaved?.();
+      setNotice(
+        refreshed === false
+          ? "Saved, but the dashboard didn't refresh (try again)."
+          : "Saved."
+      );
     } catch (submissionError) {
       setError(
         submissionError instanceof Error
           ? submissionError.message
           : "Unable to save the investment."
       );
+      setNotice("");
     } finally {
       setIsSubmitting(false);
     }
@@ -145,11 +153,8 @@ export function AddInvestmentForm({ funds }: AddInvestmentFormProps) {
       </div>
 
       <div className="form-footer">
-        {error ? (
-          <p className="error-text">{error}</p>
-        ) : (
-          <p className="muted">Saved entries appear after refresh.</p>
-        )}
+        {error ? <p className="error-text">{error}</p> : null}
+        {!error && notice ? <p className="muted">{notice}</p> : null}
         <button type="submit" disabled={isSubmitting || !funds.length}>
           {isSubmitting ? "Saving..." : "Save new entry"}
         </button>

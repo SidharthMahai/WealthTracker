@@ -1,12 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import type { FundOption, TransactionRecord } from "@/lib/types";
 
 type TransactionHistoryTableProps = {
   transactions: TransactionRecord[];
   funds: FundOption[];
+  onChanged?: () => Promise<boolean | void> | boolean | void;
 };
 
 type EditableTransaction = {
@@ -27,8 +27,8 @@ type FundFilterOption = {
 export function TransactionHistoryTable({
   transactions,
   funds,
+  onChanged,
 }: TransactionHistoryTableProps) {
-  const router = useRouter();
   const [search, setSearch] = useState("");
   const [fundFilter, setFundFilter] = useState("all");
   const [yearFilter, setYearFilter] = useState("all");
@@ -37,6 +37,7 @@ export function TransactionHistoryTable({
   const [draft, setDraft] = useState<EditableTransaction | null>(null);
   const [busyRowId, setBusyRowId] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
 
   const fundOptions = useMemo(() => {
     const optionMap = new Map<string, FundFilterOption>();
@@ -121,6 +122,7 @@ export function TransactionHistoryTable({
 
   function beginEdit(transaction: TransactionRecord) {
     setError("");
+    setNotice("");
     setEditingRowId(transaction.rowId);
     setDraft({
       transactionDate: transaction.transactionDate,
@@ -137,6 +139,7 @@ export function TransactionHistoryTable({
     setEditingRowId(null);
     setDraft(null);
     setError("");
+    setNotice("");
   }
 
   function updateDraft(field: keyof EditableTransaction, value: string) {
@@ -150,6 +153,7 @@ export function TransactionHistoryTable({
 
     setBusyRowId(rowId);
     setError("");
+    setNotice("Saving…");
 
     try {
       const response = await fetch("/api/transactions", {
@@ -177,13 +181,20 @@ export function TransactionHistoryTable({
       }
 
       cancelEdit();
-      router.refresh();
+      setNotice("Saved. Updating dashboard…");
+      const refreshed = await onChanged?.();
+      setNotice(
+        refreshed === false
+          ? "Saved, but the dashboard didn't refresh (try again)."
+          : "Saved."
+      );
     } catch (saveError) {
       setError(
         saveError instanceof Error
           ? saveError.message
           : "Unable to update the transaction."
       );
+      setNotice("");
     } finally {
       setBusyRowId(null);
     }
@@ -196,6 +207,7 @@ export function TransactionHistoryTable({
 
     setBusyRowId(rowId);
     setError("");
+    setNotice("Deleting…");
 
     try {
       const response = await fetch(
@@ -211,13 +223,20 @@ export function TransactionHistoryTable({
       if (editingRowId === rowId) {
         cancelEdit();
       }
-      router.refresh();
+      setNotice("Deleted. Updating dashboard…");
+      const refreshed = await onChanged?.();
+      setNotice(
+        refreshed === false
+          ? "Deleted, but the dashboard didn't refresh (try again)."
+          : "Deleted."
+      );
     } catch (deleteError) {
       setError(
         deleteError instanceof Error
           ? deleteError.message
           : "Unable to delete the transaction."
       );
+      setNotice("");
     } finally {
       setBusyRowId(null);
     }
@@ -320,6 +339,7 @@ export function TransactionHistoryTable({
       </div>
 
       {error ? <p className="error-text">{error}</p> : null}
+      {!error && notice ? <p className="muted">{notice}</p> : null}
 
       <div className="table-scroll">
         <table>
