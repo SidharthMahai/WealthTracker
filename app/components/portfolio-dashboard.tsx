@@ -40,6 +40,7 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
   const [currentDashboard, setCurrentDashboard] = useState(dashboard);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState("");
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<number | null>(null);
   const [theme, setTheme] = useState<"light" | "dark">("light");
 
   useEffect(() => {
@@ -59,24 +60,40 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
     window.localStorage.setItem("investment-theme", theme);
   }, [theme]);
 
+  async function fetchDashboardSnapshot(): Promise<DashboardData> {
+    const response = await fetch(`/api/dashboard?ts=${Date.now()}`, {
+      cache: "no-store",
+      credentials: "same-origin",
+      headers: {
+        Accept: "application/json",
+        "Cache-Control": "no-cache",
+        Pragma: "no-cache",
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error("Could not refresh the dashboard data.");
+    }
+
+    return (await response.json()) as DashboardData;
+  }
+
   async function refreshDashboard(): Promise<boolean> {
     setRefreshing(true);
     setRefreshError("");
 
     try {
-      const response = await fetch(`/api/dashboard?ts=${Date.now()}`, {
-        credentials: "same-origin",
-        headers: {
-          Accept: "application/json",
-          "Cache-Control": "no-cache",
-        },
-      });
-      if (!response.ok) {
-        throw new Error("Could not refresh the dashboard data.");
-      }
-
-      const payload = (await response.json()) as DashboardData;
+      const payload = await fetchDashboardSnapshot();
       setCurrentDashboard(payload);
+      setLastUpdatedAt(Date.now());
+
+      await new Promise<void>((resolve) => {
+        window.setTimeout(() => resolve(), 180);
+      });
+
+      const secondPayload = await fetchDashboardSnapshot();
+      setCurrentDashboard(secondPayload);
+      setLastUpdatedAt(Date.now());
       return true;
     } catch (error) {
       setRefreshError(
@@ -110,6 +127,16 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
           </p>
           {refreshing ? <p className="muted">Updating…</p> : null}
           {refreshError ? <p className="error-text">{refreshError}</p> : null}
+          {lastUpdatedAt ? (
+            <p className="muted">
+              Last updated:{" "}
+              {new Intl.DateTimeFormat("en-IN", {
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+              }).format(new Date(lastUpdatedAt))}
+            </p>
+          ) : null}
         </div>
 
         <div className="hero-card">

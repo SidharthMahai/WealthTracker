@@ -3,6 +3,7 @@ import { getDashboardData } from "@/lib/portfolio";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export async function GET() {
   const dashboard = await getDashboardData();
@@ -12,4 +13,3 @@ export async function GET() {
     },
   });
 }
-
