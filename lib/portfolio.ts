@@ -15,6 +15,7 @@ import type {
   NewTransactionInput,
   TransactionRecord,
 } from "@/lib/types";
+import type { WorkbookContext } from "@/lib/workbook-storage";
 
 const DEFAULT_WORKBOOK_PATH = path.join(process.cwd(), "data", "Investment-Tracker.xlsx");
 
@@ -63,39 +64,7 @@ export async function getDashboardData(): Promise<DashboardData> {
     return buildEmptyDashboardData();
   }
   const { funds, transactions } = readPortfolioWorkbook(workbookContext.localPath);
-  const fundSummaries = buildFundSummaries(funds, transactions);
-
-  const totalInvested = sumBy(fundSummaries, (fund) => fund.totalInvested);
-  const currentValue = sumBy(fundSummaries, (fund) => fund.currentValue);
-  const profitLoss = sumBy(fundSummaries, (fund) => fund.profitLoss);
-
-  return {
-    workbookName: workbookContext.workbookName,
-    workbookPath: workbookContext.workbookPathLabel,
-    metrics: {
-      totalInvested,
-      currentValue,
-      profitLoss,
-      absoluteReturn: totalInvested === 0 ? 0 : profitLoss / totalInvested,
-    },
-    funds: fundSummaries.map((fund) => ({
-      fundId: fund.fundId,
-      name: fund.name,
-    })),
-    fundSummaries,
-    fundChart: fundSummaries.map((fund) => ({
-      fundId: fund.fundId,
-      name: fund.name,
-      invested: fund.totalInvested,
-      currentValue: fund.currentValue,
-    })),
-    portfolioFlowChart: buildPortfolioFlowChart(transactions, funds),
-    yearlyChart: buildYearlyChart(transactions),
-    categoryChart: buildCategoryChart(fundSummaries),
-    transactions: transactions
-      .slice()
-      .sort((left, right) => sortTransactionsDescending(left, right)),
-  };
+  return buildDashboardSnapshot(workbookContext, funds, transactions);
 }
 
 export async function addTransaction(input: NewTransactionInput) {
@@ -119,9 +88,15 @@ export async function addTransaction(input: NewTransactionInput) {
     input: parsed,
   });
 
-  writePortfolioWorkbook(workbookPath, workbook, funds, [...transactions, newTransaction]);
+  const updatedTransactions = [...transactions, newTransaction];
+  writePortfolioWorkbook(workbookPath, workbook, funds, updatedTransactions);
   await persistWorkbookIfBlob(workbookContext);
-  return { entryId: newEntryId, rowId: newRowId };
+
+  return {
+    entryId: newEntryId,
+    rowId: newRowId,
+    dashboard: buildDashboardSnapshot(workbookContext, funds, updatedTransactions),
+  };
 }
 
 export async function updateTransaction(
@@ -159,7 +134,11 @@ export async function updateTransaction(
 
   writePortfolioWorkbook(workbookPath, workbook, funds, updatedTransactions);
   await persistWorkbookIfBlob(workbookContext);
-  return { entryId: existingTransaction.entryId, rowId: existingTransaction.rowId };
+  return {
+    entryId: existingTransaction.entryId,
+    rowId: existingTransaction.rowId,
+    dashboard: buildDashboardSnapshot(workbookContext, funds, updatedTransactions),
+  };
 }
 
 export async function deleteTransaction(rowId: string) {
@@ -180,7 +159,50 @@ export async function deleteTransaction(rowId: string) {
 
   writePortfolioWorkbook(workbookPath, workbook, funds, updatedTransactions);
   await persistWorkbookIfBlob(workbookContext);
-  return { rowId };
+  return {
+    rowId,
+    dashboard: buildDashboardSnapshot(workbookContext, funds, updatedTransactions),
+  };
+}
+
+function buildDashboardSnapshot(
+  workbookContext: WorkbookContext,
+  funds: FundRecord[],
+  transactions: TransactionRecord[]
+): DashboardData {
+  const fundSummaries = buildFundSummaries(funds, transactions);
+
+  const totalInvested = sumBy(fundSummaries, (fund) => fund.totalInvested);
+  const currentValue = sumBy(fundSummaries, (fund) => fund.currentValue);
+  const profitLoss = sumBy(fundSummaries, (fund) => fund.profitLoss);
+
+  return {
+    workbookName: workbookContext.workbookName,
+    workbookPath: workbookContext.workbookPathLabel,
+    metrics: {
+      totalInvested,
+      currentValue,
+      profitLoss,
+      absoluteReturn: totalInvested === 0 ? 0 : profitLoss / totalInvested,
+    },
+    funds: fundSummaries.map((fund) => ({
+      fundId: fund.fundId,
+      name: fund.name,
+    })),
+    fundSummaries,
+    fundChart: fundSummaries.map((fund) => ({
+      fundId: fund.fundId,
+      name: fund.name,
+      invested: fund.totalInvested,
+      currentValue: fund.currentValue,
+    })),
+    portfolioFlowChart: buildPortfolioFlowChart(transactions, funds),
+    yearlyChart: buildYearlyChart(transactions),
+    categoryChart: buildCategoryChart(fundSummaries),
+    transactions: transactions
+      .slice()
+      .sort((left, right) => sortTransactionsDescending(left, right)),
+  };
 }
 
 

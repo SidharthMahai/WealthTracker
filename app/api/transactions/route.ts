@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import {
   addTransaction,
   deleteTransaction,
-  getDashboardData,
   updateTransaction,
 } from "@/lib/portfolio";
 import type { NewTransactionInput } from "@/lib/types";
@@ -14,9 +13,8 @@ export async function POST(request: Request) {
   try {
     const payload = await request.json();
     const result = await addTransaction(payload);
-    const dashboard = await getDashboardData();
     return NextResponse.json(
-      { ok: true, ...result, dashboard },
+      { ok: true, ...result },
       { status: 201, headers: { "Cache-Control": "no-store" } }
     );
   } catch (error) {
@@ -44,9 +42,8 @@ export async function PATCH(request: Request) {
       payload.rowId,
       payload.transaction as NewTransactionInput
     );
-    const dashboard = await getDashboardData();
     return NextResponse.json(
-      { ok: true, ...result, dashboard },
+      { ok: true, ...result },
       { headers: { "Cache-Control": "no-store" } }
     );
   } catch (error) {
@@ -69,9 +66,8 @@ export async function DELETE(request: Request) {
     }
 
     const result = await deleteTransaction(rowId);
-    const dashboard = await getDashboardData();
     return NextResponse.json(
-      { ok: true, ...result, dashboard },
+      { ok: true, ...result },
       { headers: { "Cache-Control": "no-store" } }
     );
   } catch (error) {
