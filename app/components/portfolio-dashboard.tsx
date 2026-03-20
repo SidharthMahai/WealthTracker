@@ -64,7 +64,13 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
     setRefreshError("");
 
     try {
-      const response = await fetch("/api/dashboard", { cache: "no-store" });
+      const response = await fetch(`/api/dashboard?ts=${Date.now()}`, {
+        credentials: "same-origin",
+        headers: {
+          Accept: "application/json",
+          "Cache-Control": "no-cache",
+        },
+      });
       if (!response.ok) {
         throw new Error("Could not refresh the dashboard data.");
       }
