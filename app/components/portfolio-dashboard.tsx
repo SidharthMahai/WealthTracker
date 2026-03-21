@@ -259,19 +259,42 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
           detail={formatInrFull(currentDashboard.metrics.netWorthCurrentValue)}
         />
         <MetricCard
-          label="Purchase value"
-          value={formatInrCompact(currentDashboard.metrics.totalInvested)}
-          detail={formatInrFull(currentDashboard.metrics.totalInvested)}
+          label="Mutual funds (purchase)"
+          value={formatInrCompact(currentDashboard.metrics.mutualFundPurchaseValue)}
+          detail={formatInrFull(currentDashboard.metrics.mutualFundPurchaseValue)}
         />
         <MetricCard
-          label="Current value (MF + schemes)"
-          value={formatInrCompact(currentDashboard.metrics.currentValue)}
-          detail={`${formatInrFull(currentDashboard.metrics.currentValue)} · P/L ${formatInrFull(
-            currentDashboard.metrics.profitLoss
-          )} · ${formatPercent(currentDashboard.metrics.absoluteReturn)}`}
+          label="Mutual funds (current)"
+          value={formatInrCompact(currentDashboard.metrics.mutualFundCurrentValue)}
+          detail={`${formatInrFull(
+            currentDashboard.metrics.mutualFundCurrentValue
+          )} · P/L ${formatInrFull(currentDashboard.metrics.mutualFundProfitLoss)} · ${formatPercent(
+            currentDashboard.metrics.mutualFundAbsoluteReturn
+          )}`}
+          tone={
+            currentDashboard.metrics.mutualFundProfitLoss >= 0 ? "positive" : "negative"
+          }
         />
         <MetricCard
-          label="Stocks (current value)"
+          label="Schemes (purchase)"
+          value={formatInrCompact(currentDashboard.metrics.schemePurchaseValue)}
+          detail={formatInrFull(currentDashboard.metrics.schemePurchaseValue)}
+        />
+        <MetricCard
+          label="Schemes (current)"
+          value={formatInrCompact(currentDashboard.metrics.schemeCurrentValue)}
+          detail={formatInrFull(currentDashboard.metrics.schemeCurrentValue)}
+        />
+        <MetricCard
+          label="Schemes (interest)"
+          value={formatInrCompact(currentDashboard.metrics.schemeInterestCredited)}
+          detail={formatInrFull(currentDashboard.metrics.schemeInterestCredited)}
+          tone={
+            currentDashboard.metrics.schemeInterestCredited >= 0 ? "positive" : "negative"
+          }
+        />
+        <MetricCard
+          label="Stocks (current)"
           value={formatInrCompact(currentDashboard.metrics.stockCurrentValue)}
           detail={formatInrFull(currentDashboard.metrics.stockCurrentValue)}
         />

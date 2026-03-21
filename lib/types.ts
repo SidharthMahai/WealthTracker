@@ -65,10 +65,13 @@ export type DashboardData = {
   workbookName: string;
   workbookPath: string;
   metrics: {
-    totalInvested: number;
-    currentValue: number;
-    profitLoss: number;
-    absoluteReturn: number;
+    mutualFundPurchaseValue: number;
+    mutualFundCurrentValue: number;
+    mutualFundProfitLoss: number;
+    mutualFundAbsoluteReturn: number;
+    schemePurchaseValue: number;
+    schemeCurrentValue: number;
+    schemeInterestCredited: number;
     stockCurrentValue: number;
     netWorthCurrentValue: number;
   };

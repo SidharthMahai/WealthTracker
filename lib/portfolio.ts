@@ -50,10 +50,13 @@ function buildEmptyDashboardData(): DashboardData {
     workbookName: "No workbook configured",
     workbookPath: configuredPath,
     metrics: {
-      totalInvested: 0,
-      currentValue: 0,
-      profitLoss: 0,
-      absoluteReturn: 0,
+      mutualFundPurchaseValue: 0,
+      mutualFundCurrentValue: 0,
+      mutualFundProfitLoss: 0,
+      mutualFundAbsoluteReturn: 0,
+      schemePurchaseValue: 0,
+      schemeCurrentValue: 0,
+      schemeInterestCredited: 0,
       stockCurrentValue: 0,
       netWorthCurrentValue: 0,
     },
@@ -252,27 +255,40 @@ function buildDashboardSnapshot(
 ): DashboardData {
   const fundSummaries = buildFundSummaries(funds, transactions);
 
-  const nonStockSummaries = fundSummaries.filter(
-    (fund) => (fund.assetType || "").toLowerCase() !== "stock"
+  const mutualFundSummaries = fundSummaries.filter(
+    (fund) => (fund.assetType || "").toLowerCase() === "mutual fund"
+  );
+  const schemeSummaries = fundSummaries.filter(
+    (fund) => (fund.assetType || "").toLowerCase() === "govt scheme"
   );
   const stockSummaries = fundSummaries.filter(
     (fund) => (fund.assetType || "").toLowerCase() === "stock"
   );
 
-  const totalInvested = sumBy(nonStockSummaries, (fund) => fund.totalInvested);
-  const currentValue = sumBy(nonStockSummaries, (fund) => fund.currentValue);
-  const profitLoss = sumBy(nonStockSummaries, (fund) => fund.profitLoss);
+  const mutualFundPurchaseValue = sumBy(mutualFundSummaries, (fund) => fund.totalInvested);
+  const mutualFundCurrentValue = sumBy(mutualFundSummaries, (fund) => fund.currentValue);
+  const mutualFundProfitLoss = sumBy(mutualFundSummaries, (fund) => fund.profitLoss);
+  const mutualFundAbsoluteReturn =
+    mutualFundPurchaseValue === 0 ? 0 : mutualFundProfitLoss / mutualFundPurchaseValue;
+
+  const schemePurchaseValue = sumBy(schemeSummaries, (fund) => fund.totalInvested);
+  const schemeCurrentValue = sumBy(schemeSummaries, (fund) => fund.currentValue);
+  const schemeInterestCredited = sumBy(schemeSummaries, (fund) => fund.profitLoss);
+
   const stockCurrentValue = sumBy(stockSummaries, (fund) => fund.currentValue);
-  const netWorthCurrentValue = roundToTwo(currentValue + stockCurrentValue);
+  const netWorthCurrentValue = sumBy(fundSummaries, (fund) => fund.currentValue);
 
   return {
     workbookName: workbookContext.workbookName,
     workbookPath: workbookContext.workbookPathLabel,
     metrics: {
-      totalInvested,
-      currentValue,
-      profitLoss,
-      absoluteReturn: totalInvested === 0 ? 0 : profitLoss / totalInvested,
+      mutualFundPurchaseValue,
+      mutualFundCurrentValue,
+      mutualFundProfitLoss,
+      mutualFundAbsoluteReturn,
+      schemePurchaseValue,
+      schemeCurrentValue,
+      schemeInterestCredited,
       stockCurrentValue,
       netWorthCurrentValue,
     },
@@ -282,7 +298,9 @@ function buildDashboardSnapshot(
       assetType: fund.assetType,
     })),
     fundSummaries,
-    fundChart: nonStockSummaries.map((fund) => ({
+    fundChart: fundSummaries
+      .filter((fund) => (fund.assetType || "").toLowerCase() !== "stock")
+      .map((fund) => ({
       fundId: fund.fundId,
       name: fund.name,
       invested: fund.totalInvested,
