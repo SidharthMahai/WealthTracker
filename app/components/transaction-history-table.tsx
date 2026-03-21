@@ -434,15 +434,15 @@ export function TransactionHistoryTable({
         <table>
           <thead>
             <tr>
-              <th>Date</th>
+              <th className="date-col">Date</th>
               <th className="fy-col">FY</th>
-              <th>Fund</th>
+              <th className="fund-col">Fund</th>
               <th>Type</th>
               <th>Direction</th>
               <th>Amount</th>
               <th>Units</th>
               <th>NAV</th>
-              <th>Folio</th>
+              <th className="folio-col">Folio</th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -469,7 +469,7 @@ export function TransactionHistoryTable({
               if (isEditing) {
                 return (
                   <tr key={transaction.rowId}>
-                    <td className="numeric-cell">
+                    <td className="numeric-cell date-col">
                       <input
                         type="date"
                         value={draft.transactionDate}
@@ -481,7 +481,7 @@ export function TransactionHistoryTable({
                     <td className="numeric-cell fy-col">
                       {getFinancialYearLabel(draft.transactionDate)}
                     </td>
-                    <td>
+                    <td className="fund-col">
                       <select
                         value={draft.fundId}
                         onChange={(event) => updateDraft("fundId", event.target.value)}
@@ -545,7 +545,12 @@ export function TransactionHistoryTable({
                         onChange={(event) => updateDraft("nav", event.target.value)}
                       />
                     </td>
-                    <td className="numeric-cell">{transaction.folioNumber}</td>
+                    <td
+                      className="numeric-cell folio-col"
+                      title={transaction.folioNumber}
+                    >
+                      {transaction.folioNumber}
+                    </td>
                     <td className="actions-cell">
                       <button
                         type="button"
@@ -570,11 +575,11 @@ export function TransactionHistoryTable({
 
               return (
                 <tr key={transaction.rowId}>
-                  <td className="numeric-cell">
+                  <td className="numeric-cell date-col">
                     {formatFriendlyDate(transaction.transactionDate)}
                   </td>
                   <td className="numeric-cell fy-col">{transaction.financialYear}</td>
-                  <td>{transaction.fundName}</td>
+                  <td className="fund-col">{transaction.fundName}</td>
                   <td>{transaction.transactionType}</td>
                   <td>{transaction.direction}</td>
                   <td
@@ -586,7 +591,12 @@ export function TransactionHistoryTable({
                   </td>
                   <td className="numeric-cell">{formatUnits(signedUnits)}</td>
                   <td className="numeric-cell">{formatNav(transaction.nav)}</td>
-                  <td className="numeric-cell">{transaction.folioNumber}</td>
+                  <td
+                    className="numeric-cell folio-col"
+                    title={transaction.folioNumber}
+                  >
+                    {transaction.folioNumber}
+                  </td>
                   <td className="actions-cell">
                     <button
                       type="button"
