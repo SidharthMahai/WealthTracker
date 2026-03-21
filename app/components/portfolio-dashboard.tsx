@@ -279,6 +279,12 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
           }
         />
         <MetricCard
+          label="Stocks (current)"
+          value={formatInrCompact(currentDashboard.metrics.stockCurrentValue)}
+          detail={formatInrFull(currentDashboard.metrics.stockCurrentValue)}
+          tone="positive"
+        />
+        <MetricCard
           label="Govt schemes (purchase)"
           value={formatInrCompact(currentDashboard.metrics.schemePurchaseValue)}
           detail={formatInrFull(currentDashboard.metrics.schemePurchaseValue)}
@@ -295,12 +301,6 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
           tone={
             currentDashboard.metrics.schemeInterestCredited >= 0 ? "positive" : "negative"
           }
-        />
-        <MetricCard
-          label="Stocks (current)"
-          value={formatInrCompact(currentDashboard.metrics.stockCurrentValue)}
-          detail={formatInrFull(currentDashboard.metrics.stockCurrentValue)}
-          tone="positive"
         />
       </section>
 
