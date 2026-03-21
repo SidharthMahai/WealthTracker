@@ -32,6 +32,7 @@ export function TransactionHistoryTable({
   onDashboardUpdated,
 }: TransactionHistoryTableProps) {
   const [search, setSearch] = useState("");
+  const [assetTypeFilter, setAssetTypeFilter] = useState("all");
   const [fundFilter, setFundFilter] = useState("all");
   const [yearFilter, setYearFilter] = useState("all");
   const [monthFilter, setMonthFilter] = useState("all");
@@ -59,6 +60,14 @@ export function TransactionHistoryTable({
     );
   }, [transactions]);
 
+  const assetTypeByFundId = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const fund of funds) {
+      map.set(fund.fundId, (fund.assetType || "").toLowerCase());
+    }
+    return map;
+  }, [funds]);
+
   const yearOptions = useMemo(
     () =>
       Array.from(
@@ -84,6 +93,8 @@ export function TransactionHistoryTable({
     const normalizedSearch = normalizeValue(search);
 
     return transactions.filter((transaction) => {
+      const type = assetTypeByFundId.get(transaction.fundId) ?? "";
+      const sameType = assetTypeFilter === "all" || type === assetTypeFilter;
       const sameFund =
         fundFilter === "all" || transaction.fundName === fundFilter;
       const sameYear =
@@ -94,7 +105,7 @@ export function TransactionHistoryTable({
       const sameDirection =
         directionFilter === "all" || transaction.direction === directionFilter;
 
-      if (!sameFund || !sameYear || !sameMonth || !sameDirection) {
+      if (!sameType || !sameFund || !sameYear || !sameMonth || !sameDirection) {
         return false;
       }
 
@@ -110,13 +121,23 @@ export function TransactionHistoryTable({
         transaction.transactionType,
         transaction.direction,
         transaction.folioNumber,
+        type,
       ]
         .join(" ")
         .toLowerCase();
 
       return searchText.includes(normalizedSearch);
     });
-  }, [directionFilter, fundFilter, monthFilter, search, transactions, yearFilter]);
+  }, [
+    assetTypeByFundId,
+    assetTypeFilter,
+    directionFilter,
+    fundFilter,
+    monthFilter,
+    search,
+    transactions,
+    yearFilter,
+  ]);
 
   const totals = useMemo(
     () =>
@@ -282,6 +303,7 @@ export function TransactionHistoryTable({
 
   function resetFilters() {
     setSearch("");
+    setAssetTypeFilter("all");
     setFundFilter("all");
     setYearFilter("all");
     setMonthFilter("all");
@@ -324,6 +346,19 @@ export function TransactionHistoryTable({
                 {fund.fundName}
               </option>
             ))}
+          </select>
+        </label>
+
+        <label>
+          <span>Fund Type</span>
+          <select
+            value={assetTypeFilter}
+            onChange={(event) => setAssetTypeFilter(event.target.value)}
+          >
+            <option value="all">All</option>
+            <option value="mutual fund">Mutual funds</option>
+            <option value="govt scheme">Govt schemes</option>
+            <option value="stock">Stocks</option>
           </select>
         </label>
 
@@ -400,7 +435,6 @@ export function TransactionHistoryTable({
           <thead>
             <tr>
               <th>Date</th>
-              <th>Month</th>
               <th>FY</th>
               <th>Fund</th>
               <th>Type</th>
@@ -412,10 +446,12 @@ export function TransactionHistoryTable({
               <th>Actions</th>
             </tr>
           </thead>
-          <tbody key={`${search}|${fundFilter}|${yearFilter}|${monthFilter}|${directionFilter}`}>
+          <tbody
+            key={`${search}|${assetTypeFilter}|${fundFilter}|${yearFilter}|${monthFilter}|${directionFilter}`}
+          >
             {filteredTransactions.length === 0 ? (
               <tr>
-                <td colSpan={11}>No transactions match these filters.</td>
+                <td colSpan={10}>No transactions match these filters.</td>
               </tr>
             ) : null}
 
@@ -441,9 +477,6 @@ export function TransactionHistoryTable({
                           updateDraft("transactionDate", event.target.value)
                         }
                       />
-                    </td>
-                    <td className="numeric-cell">
-                      {formatMonthLabel(getMonthKey(draft.transactionDate) ?? "") || "—"}
                     </td>
                     <td className="numeric-cell">
                       {getFinancialYearLabel(draft.transactionDate)}
@@ -540,10 +573,6 @@ export function TransactionHistoryTable({
                   <td className="numeric-cell">
                     {formatFriendlyDate(transaction.transactionDate)}
                   </td>
-                  <td className="numeric-cell">
-                    {formatMonthLabel(getMonthKey(transaction.transactionDate) ?? "") ||
-                      "—"}
-                  </td>
                   <td className="numeric-cell">{transaction.financialYear}</td>
                   <td>{transaction.fundName}</td>
                   <td>{transaction.transactionType}</td>
@@ -582,7 +611,7 @@ export function TransactionHistoryTable({
           </tbody>
           <tfoot>
             <tr>
-              <td colSpan={6}>
+              <td colSpan={5}>
                 <strong>Filtered totals</strong>
                 <span className="subtle-line">
                   Contribution {formatInrFull(totals.contributions)} · Redemption{" "}
