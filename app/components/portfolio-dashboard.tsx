@@ -755,6 +755,11 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
                       <Cell
                         key={entry.category}
                         fill={allocationColors[index % allocationColors.length]}
+                        fillOpacity={
+                          activeAllocationIndex === null || activeAllocationIndex === index
+                            ? 1
+                            : 0.22
+                        }
                       />
                     ))}
                   </Pie>
@@ -774,7 +779,11 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
                 return (
                   <div
                     className={`allocation-item ${
-                      activeAllocationIndex === index ? "is-active" : ""
+                      activeAllocationIndex === index
+                        ? "is-active"
+                        : activeAllocationIndex === null
+                          ? ""
+                          : "is-dimmed"
                     }`}
                     key={category.category}
                     onMouseEnter={() => setActiveAllocationIndex(index)}

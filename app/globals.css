@@ -354,7 +354,7 @@ code {
 
 .chart-tooltip-title {
   margin: 0 0 8px;
-  font-weight: 850;
+  font-weight: 750;
 }
 
 .chart-tooltip-row {
@@ -365,7 +365,7 @@ code {
 
 .chart-tooltip-row strong {
   color: var(--text);
-  font-weight: 850;
+  font-weight: 750;
 }
 
 .allocation-layout {
@@ -413,6 +413,10 @@ code {
   transform: translateY(-2px);
   box-shadow: 0 14px 28px rgba(15, 23, 42, 0.12);
   background: color-mix(in srgb, var(--bg-overlay) 75%, var(--panel) 25%);
+}
+
+.allocation-item.is-dimmed {
+  opacity: 0.6;
 }
 
 .allocation-item p {
