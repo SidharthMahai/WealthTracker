@@ -254,22 +254,21 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
 
       <section className="metrics-grid">
         <MetricCard
+          label="Net worth (current)"
+          value={formatInrCompact(currentDashboard.metrics.netWorthCurrentValue)}
+          detail={formatInrFull(currentDashboard.metrics.netWorthCurrentValue)}
+        />
+        <MetricCard
           label="Purchase value"
           value={formatInrCompact(currentDashboard.metrics.totalInvested)}
           detail={formatInrFull(currentDashboard.metrics.totalInvested)}
         />
         <MetricCard
-          label="Current value"
+          label="Current value (MF + schemes)"
           value={formatInrCompact(currentDashboard.metrics.currentValue)}
-          detail={formatInrFull(currentDashboard.metrics.currentValue)}
-        />
-        <MetricCard
-          label="Profit or loss"
-          value={formatInrCompact(currentDashboard.metrics.profitLoss)}
-          detail={`${formatInrFull(currentDashboard.metrics.profitLoss)} · ${formatPercent(
-            currentDashboard.metrics.absoluteReturn
-          )}`}
-          tone={currentDashboard.metrics.profitLoss >= 0 ? "positive" : "negative"}
+          detail={`${formatInrFull(currentDashboard.metrics.currentValue)} · P/L ${formatInrFull(
+            currentDashboard.metrics.profitLoss
+          )} · ${formatPercent(currentDashboard.metrics.absoluteReturn)}`}
         />
         <MetricCard
           label="Stocks (current value)"
@@ -557,9 +556,10 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
             <div className="allocation-legend">
               {currentDashboard.categoryChart.map((category, index) => {
                 const share =
-                  currentDashboard.metrics.currentValue === 0
+                  currentDashboard.metrics.netWorthCurrentValue === 0
                     ? 0
-                    : category.currentValue / currentDashboard.metrics.currentValue;
+                    : category.currentValue /
+                      currentDashboard.metrics.netWorthCurrentValue;
 
                 return (
                   <div className="allocation-item" key={category.category}>
@@ -647,7 +647,7 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
                     {fund.assetType === "Stock" ? "—" : formatPercent(fund.absoluteReturn)}
                   </td>
                   <td className="actions-cell">
-                    {fund.assetType === "Mutual Fund" || fund.assetType === "Govt Scheme" ? (
+                    {fund.assetType === "Mutual Fund" ? (
                       <button
                         type="button"
                         className="link-button"

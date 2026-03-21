@@ -58,6 +58,7 @@ export type FundSummary = {
 export type FundOption = {
   fundId: string;
   name: string;
+  assetType: string;
 };
 
 export type DashboardData = {
@@ -69,6 +70,7 @@ export type DashboardData = {
     profitLoss: number;
     absoluteReturn: number;
     stockCurrentValue: number;
+    netWorthCurrentValue: number;
   };
   funds: FundOption[];
   fundSummaries: FundSummary[];

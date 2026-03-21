@@ -27,6 +27,16 @@ export function NavHistoryChart({ transactions, funds }: NavHistoryChartProps) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
+  const navEligibleFundIds = useMemo(() => {
+    const eligible = new Set<string>();
+    for (const fund of funds) {
+      if ((fund.assetType || "").toLowerCase() === "mutual fund") {
+        eligible.add(fund.fundId);
+      }
+    }
+    return eligible;
+  }, [funds]);
+
   const fundNameById = useMemo(() => {
     const map = new Map<string, string>();
     for (const fund of funds) {
@@ -41,6 +51,7 @@ export function NavHistoryChart({ transactions, funds }: NavHistoryChartProps) {
     for (const transaction of transactions) {
       if (!transaction.transactionDate) continue;
       if (!(transaction.nav > 0)) continue;
+      if (!navEligibleFundIds.has(transaction.fundId)) continue;
 
       const ts = Date.parse(`${transaction.transactionDate}T00:00:00Z`);
       if (Number.isNaN(ts)) continue;
@@ -75,7 +86,7 @@ export function NavHistoryChart({ transactions, funds }: NavHistoryChartProps) {
     }
 
     return byFund;
-  }, [transactions]);
+  }, [navEligibleFundIds, transactions]);
 
   const fundIdsWithNav = useMemo(() => {
     const ids = Array.from(navSeriesByFundId.keys());

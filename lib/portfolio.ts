@@ -55,6 +55,7 @@ function buildEmptyDashboardData(): DashboardData {
       profitLoss: 0,
       absoluteReturn: 0,
       stockCurrentValue: 0,
+      netWorthCurrentValue: 0,
     },
     funds: [],
     fundSummaries: [],
@@ -192,8 +193,12 @@ export async function updateFundLatestNav(input: {
   }
 
   const fund = getFundOrThrow(funds, parsed.fundId);
-  if ((fund.assetType || "").toLowerCase() === "stock") {
+  const assetType = (fund.assetType || "").toLowerCase();
+  if (assetType === "stock") {
     throw new Error("Stocks use live quotes. Update not supported here.");
+  }
+  if (assetType !== "mutual fund") {
+    throw new Error("Only mutual funds support manual NAV updates right now.");
   }
 
   fund.latestNav = roundToTwo(parsed.latestNav);
@@ -258,6 +263,7 @@ function buildDashboardSnapshot(
   const currentValue = sumBy(nonStockSummaries, (fund) => fund.currentValue);
   const profitLoss = sumBy(nonStockSummaries, (fund) => fund.profitLoss);
   const stockCurrentValue = sumBy(stockSummaries, (fund) => fund.currentValue);
+  const netWorthCurrentValue = roundToTwo(currentValue + stockCurrentValue);
 
   return {
     workbookName: workbookContext.workbookName,
@@ -268,10 +274,12 @@ function buildDashboardSnapshot(
       profitLoss,
       absoluteReturn: totalInvested === 0 ? 0 : profitLoss / totalInvested,
       stockCurrentValue,
+      netWorthCurrentValue,
     },
     funds: fundSummaries.map((fund) => ({
       fundId: fund.fundId,
       name: fund.name,
+      assetType: fund.assetType,
     })),
     fundSummaries,
     fundChart: nonStockSummaries.map((fund) => ({
@@ -282,7 +290,7 @@ function buildDashboardSnapshot(
     })),
     portfolioFlowChart: buildPortfolioFlowChart(transactions, funds),
     yearlyChart: buildYearlyChart(transactions),
-    categoryChart: buildCategoryChart(nonStockSummaries),
+    categoryChart: buildCategoryChart(fundSummaries),
     transactions: transactions
       .slice()
       .sort((left, right) => sortTransactionsDescending(left, right)),
