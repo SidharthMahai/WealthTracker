@@ -266,27 +266,30 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
         <MetricCard
           label="Mutual funds (current)"
           value={formatInrCompact(currentDashboard.metrics.mutualFundCurrentValue)}
+          detail={formatInrFull(currentDashboard.metrics.mutualFundCurrentValue)}
+        />
+        <MetricCard
+          label="Mutual funds (profit/loss)"
+          value={formatInrCompact(currentDashboard.metrics.mutualFundProfitLoss)}
           detail={`${formatInrFull(
-            currentDashboard.metrics.mutualFundCurrentValue
-          )} · P/L ${formatInrFull(currentDashboard.metrics.mutualFundProfitLoss)} · ${formatPercent(
-            currentDashboard.metrics.mutualFundAbsoluteReturn
-          )}`}
+            currentDashboard.metrics.mutualFundProfitLoss
+          )} · ${formatPercent(currentDashboard.metrics.mutualFundAbsoluteReturn)}`}
           tone={
             currentDashboard.metrics.mutualFundProfitLoss >= 0 ? "positive" : "negative"
           }
         />
         <MetricCard
-          label="Schemes (purchase)"
+          label="Govt schemes (purchase)"
           value={formatInrCompact(currentDashboard.metrics.schemePurchaseValue)}
           detail={formatInrFull(currentDashboard.metrics.schemePurchaseValue)}
         />
         <MetricCard
-          label="Schemes (current)"
+          label="Govt schemes (current)"
           value={formatInrCompact(currentDashboard.metrics.schemeCurrentValue)}
           detail={formatInrFull(currentDashboard.metrics.schemeCurrentValue)}
         />
         <MetricCard
-          label="Schemes (interest)"
+          label="Govt schemes (interest)"
           value={formatInrCompact(currentDashboard.metrics.schemeInterestCredited)}
           detail={formatInrFull(currentDashboard.metrics.schemeInterestCredited)}
           tone={
@@ -297,6 +300,7 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
           label="Stocks (current)"
           value={formatInrCompact(currentDashboard.metrics.stockCurrentValue)}
           detail={formatInrFull(currentDashboard.metrics.stockCurrentValue)}
+          tone="positive"
         />
       </section>
 
