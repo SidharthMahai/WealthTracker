@@ -68,6 +68,7 @@ export type DashboardData = {
     currentValue: number;
     profitLoss: number;
     absoluteReturn: number;
+    stockCurrentValue: number;
   };
   funds: FundOption[];
   fundSummaries: FundSummary[];

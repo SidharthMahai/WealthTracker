@@ -23,25 +23,6 @@ type NavPoint = {
   nav: number;
 };
 
-const monthYearFormatter = new Intl.DateTimeFormat("en-US", {
-  month: "short",
-  year: "numeric",
-  timeZone: "UTC",
-});
-
-const monthShortYearFormatter = new Intl.DateTimeFormat("en-US", {
-  month: "short",
-  year: "2-digit",
-  timeZone: "UTC",
-});
-
-const fullDateFormatter = new Intl.DateTimeFormat("en-US", {
-  year: "numeric",
-  month: "short",
-  day: "2-digit",
-  timeZone: "UTC",
-});
-
 export function NavHistoryChart({ transactions, funds }: NavHistoryChartProps) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -249,20 +230,42 @@ export function NavHistoryChart({ transactions, funds }: NavHistoryChartProps) {
 function formatDateTick(ts: number) {
   const date = new Date(ts);
   if (Number.isNaN(date.getTime())) return "";
-  return monthShortYearFormatter.format(date);
+  const year = String(date.getUTCFullYear()).slice(-2);
+  const month = MONTH_SHORT[date.getUTCMonth()] ?? "";
+  return `${month} ${year}`;
 }
 
 function formatDateFull(ts: number) {
   const date = new Date(ts);
   if (Number.isNaN(date.getTime())) return "";
-  return fullDateFormatter.format(date);
+  const year = date.getUTCFullYear();
+  const month = MONTH_SHORT[date.getUTCMonth()] ?? "";
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  return `${day} ${month} ${year}`;
 }
 
 function formatMonthYear(ts: number) {
   const date = new Date(ts);
   if (Number.isNaN(date.getTime())) return "";
-  return monthYearFormatter.format(date);
+  const year = date.getUTCFullYear();
+  const month = MONTH_SHORT[date.getUTCMonth()] ?? "";
+  return `${month} ${year}`;
 }
+
+const MONTH_SHORT = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
 
 function formatNav(value: number) {
   return new Intl.NumberFormat("en-IN", {

@@ -667,28 +667,42 @@ function formatMonthLabel(monthKey: string) {
     return "";
   }
 
-  const date = new Date(`${match[1]}-${match[2]}-01T00:00:00Z`);
-  if (Number.isNaN(date.getTime())) {
+  const year = Number(match[1]);
+  const monthIndex = Number(match[2]) - 1;
+  if (!Number.isFinite(year) || !Number.isFinite(monthIndex)) {
     return "";
   }
 
-  return new Intl.DateTimeFormat("en-IN", {
-    month: "short",
-    year: "numeric",
-    timeZone: "UTC",
-  }).format(date);
+  return `${MONTH_SHORT[monthIndex] ?? ""} ${year}`;
 }
 
 function formatFriendlyDate(dateString: string) {
-  const date = new Date(`${dateString}T00:00:00Z`);
-  if (Number.isNaN(date.getTime())) {
+  const match = dateString.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) {
     return dateString;
   }
 
-  return new Intl.DateTimeFormat("en-IN", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    timeZone: "UTC",
-  }).format(date);
+  const year = Number(match[1]);
+  const monthIndex = Number(match[2]) - 1;
+  const day = match[3];
+  if (!Number.isFinite(year) || !Number.isFinite(monthIndex)) {
+    return dateString;
+  }
+
+  return `${day} ${MONTH_SHORT[monthIndex] ?? ""} ${year}`;
 }
+
+const MONTH_SHORT = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];

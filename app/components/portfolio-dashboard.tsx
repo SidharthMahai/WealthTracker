@@ -124,6 +124,72 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
     setLastUpdatedAt(Date.now());
   }
 
+  async function updateLatestNavForFund(fund: {
+    fundId: string;
+    name: string;
+    latestNav: number;
+  }) {
+    const navInput = window.prompt(
+      `Update latest NAV for ${fund.name} (INR):`,
+      fund.latestNav ? String(fund.latestNav) : ""
+    );
+
+    if (navInput === null) {
+      return;
+    }
+
+    const nextNav = Number(navInput);
+    if (!Number.isFinite(nextNav) || nextNav <= 0) {
+      window.alert("Please enter a valid NAV number.");
+      return;
+    }
+
+    const dateDefault = new Date().toISOString().slice(0, 10);
+    const dateInput = window.prompt(
+      "NAV date (YYYY-MM-DD):",
+      dateDefault
+    );
+    if (dateInput === null) {
+      return;
+    }
+
+    try {
+      setRefreshing(true);
+      setRefreshError("");
+      const response = await fetch("/api/funds", {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fundId: fund.fundId,
+          latestNav: nextNav,
+          latestNavDate: dateInput || dateDefault,
+        }),
+      });
+
+      const payload = (await response.json()) as {
+        ok?: boolean;
+        error?: string;
+        dashboard?: DashboardData;
+      };
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Unable to update NAV.");
+      }
+
+      if (payload.dashboard) {
+        applyDashboardUpdate(payload.dashboard);
+      } else {
+        await refreshDashboard();
+      }
+    } catch (error) {
+      setRefreshError(
+        error instanceof Error ? error.message : "Unable to update NAV."
+      );
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
   return (
     <main className="page-shell">
       <section className="hero">
@@ -200,13 +266,15 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
         <MetricCard
           label="Profit or loss"
           value={formatInrCompact(currentDashboard.metrics.profitLoss)}
-          detail={formatInrFull(currentDashboard.metrics.profitLoss)}
+          detail={`${formatInrFull(currentDashboard.metrics.profitLoss)} · ${formatPercent(
+            currentDashboard.metrics.absoluteReturn
+          )}`}
           tone={currentDashboard.metrics.profitLoss >= 0 ? "positive" : "negative"}
         />
         <MetricCard
-          label="Absolute return"
-          value={formatPercent(currentDashboard.metrics.absoluteReturn)}
-          tone={currentDashboard.metrics.absoluteReturn >= 0 ? "positive" : "negative"}
+          label="Stocks (current value)"
+          value={formatInrCompact(currentDashboard.metrics.stockCurrentValue)}
+          detail={formatInrFull(currentDashboard.metrics.stockCurrentValue)}
         />
       </section>
 
@@ -548,6 +616,7 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
                 <th>Current Value</th>
                 <th>Profit or Loss</th>
                 <th>Return</th>
+                <th>Update</th>
               </tr>
             </thead>
             <tbody>
@@ -559,21 +628,37 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
                   </td>
                   <td>{fund.category}</td>
                   <td>{fund.assetType || "—"}</td>
-                  <td className="numeric-cell">{formatInrFull(fund.totalInvested)}</td>
+                  <td className="numeric-cell">
+                    {fund.assetType === "Stock" ? "—" : formatInrFull(fund.totalInvested)}
+                  </td>
                   <td className="numeric-cell">{formatInrFull(fund.currentValue)}</td>
                   <td
                     className={`numeric-cell ${
                       fund.profitLoss >= 0 ? "text-positive" : "text-negative"
                     }`}
                   >
-                    {formatInrFull(fund.profitLoss)}
+                    {fund.assetType === "Stock" ? "—" : formatInrFull(fund.profitLoss)}
                   </td>
                   <td
                     className={`numeric-cell ${
                       fund.absoluteReturn >= 0 ? "text-positive" : "text-negative"
                     }`}
                   >
-                    {formatPercent(fund.absoluteReturn)}
+                    {fund.assetType === "Stock" ? "—" : formatPercent(fund.absoluteReturn)}
+                  </td>
+                  <td className="actions-cell">
+                    {fund.assetType === "Mutual Fund" || fund.assetType === "Govt Scheme" ? (
+                      <button
+                        type="button"
+                        className="link-button"
+                        onClick={() => updateLatestNavForFund(fund)}
+                        disabled={refreshing}
+                      >
+                        Edit NAV
+                      </button>
+                    ) : (
+                      "—"
+                    )}
                   </td>
                 </tr>
               ))}
@@ -784,27 +869,61 @@ function splitFundLabel(name: string) {
 }
 
 function formatPeriodTick(value: string) {
-  const date = new Date(`${value}-01T00:00:00Z`);
-  if (Number.isNaN(date.getTime())) {
+  const match = value.match(/^(\d{4})-(\d{2})$/);
+  if (!match) {
     return value;
   }
 
-  return new Intl.DateTimeFormat("en-IN", {
-    month: "short",
-    year: "numeric",
-    timeZone: "UTC",
-  }).format(date);
+  const year = Number(match[1]);
+  const monthIndex = Number(match[2]) - 1;
+  if (!Number.isFinite(year) || !Number.isFinite(monthIndex)) {
+    return value;
+  }
+
+  return `${MONTH_SHORT[monthIndex] ?? ""} ${year}`;
 }
 
 function formatPeriodLabel(value: string) {
-  const date = new Date(`${value}-01T00:00:00Z`);
-  if (Number.isNaN(date.getTime())) {
+  const match = value.match(/^(\d{4})-(\d{2})$/);
+  if (!match) {
     return value;
   }
 
-  return new Intl.DateTimeFormat("en-IN", {
-    month: "long",
-    year: "numeric",
-    timeZone: "UTC",
-  }).format(date);
+  const year = Number(match[1]);
+  const monthIndex = Number(match[2]) - 1;
+  if (!Number.isFinite(year) || !Number.isFinite(monthIndex)) {
+    return value;
+  }
+
+  return `${MONTH_LONG[monthIndex] ?? ""} ${year}`;
 }
+
+const MONTH_SHORT = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
+
+const MONTH_LONG = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];

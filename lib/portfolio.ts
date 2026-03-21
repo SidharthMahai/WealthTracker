@@ -32,6 +32,12 @@ const transactionSchema = z.object({
 
 type TransactionInput = z.infer<typeof transactionSchema>;
 
+const updateNavSchema = z.object({
+  fundId: z.string().min(1),
+  latestNav: z.number().positive(),
+  latestNavDate: z.string().min(1),
+});
+
 type FundPosition = {
   costBasis: number;
   units: number;
@@ -48,6 +54,7 @@ function buildEmptyDashboardData(): DashboardData {
       currentValue: 0,
       profitLoss: 0,
       absoluteReturn: 0,
+      stockCurrentValue: 0,
     },
     funds: [],
     fundSummaries: [],
@@ -170,6 +177,38 @@ export async function deleteTransaction(rowId: string) {
   };
 }
 
+export async function updateFundLatestNav(input: {
+  fundId: string;
+  latestNav: number;
+  latestNavDate: string;
+}) {
+  const workbookContext = await getWorkbookContextOrThrow(DEFAULT_WORKBOOK_PATH);
+  const workbookPath = workbookContext.localPath;
+  const parsed = updateNavSchema.parse(input);
+
+  const { workbook, funds, transactions } = readPortfolioWorkbook(workbookPath, true);
+  if (!workbook) {
+    throw new Error("Workbook could not be opened.");
+  }
+
+  const fund = getFundOrThrow(funds, parsed.fundId);
+  if ((fund.assetType || "").toLowerCase() === "stock") {
+    throw new Error("Stocks use live quotes. Update not supported here.");
+  }
+
+  fund.latestNav = roundToTwo(parsed.latestNav);
+  fund.latestNavDate = parsed.latestNavDate;
+
+  writePortfolioWorkbook(workbookPath, workbook, funds, transactions);
+  await persistWorkbookIfBlob(workbookContext);
+
+  const hydratedFunds = await hydrateFundsWithLiveMarketData(funds);
+  return {
+    fundId: fund.fundId,
+    dashboard: buildDashboardSnapshot(workbookContext, hydratedFunds, transactions),
+  };
+}
+
 async function hydrateFundsWithLiveMarketData(funds: FundRecord[]): Promise<FundRecord[]> {
   const stockFunds = funds.filter(
     (fund) => (fund.assetType || "").toLowerCase() === "stock"
@@ -208,9 +247,17 @@ function buildDashboardSnapshot(
 ): DashboardData {
   const fundSummaries = buildFundSummaries(funds, transactions);
 
-  const totalInvested = sumBy(fundSummaries, (fund) => fund.totalInvested);
-  const currentValue = sumBy(fundSummaries, (fund) => fund.currentValue);
-  const profitLoss = sumBy(fundSummaries, (fund) => fund.profitLoss);
+  const nonStockSummaries = fundSummaries.filter(
+    (fund) => (fund.assetType || "").toLowerCase() !== "stock"
+  );
+  const stockSummaries = fundSummaries.filter(
+    (fund) => (fund.assetType || "").toLowerCase() === "stock"
+  );
+
+  const totalInvested = sumBy(nonStockSummaries, (fund) => fund.totalInvested);
+  const currentValue = sumBy(nonStockSummaries, (fund) => fund.currentValue);
+  const profitLoss = sumBy(nonStockSummaries, (fund) => fund.profitLoss);
+  const stockCurrentValue = sumBy(stockSummaries, (fund) => fund.currentValue);
 
   return {
     workbookName: workbookContext.workbookName,
@@ -220,13 +267,14 @@ function buildDashboardSnapshot(
       currentValue,
       profitLoss,
       absoluteReturn: totalInvested === 0 ? 0 : profitLoss / totalInvested,
+      stockCurrentValue,
     },
     funds: fundSummaries.map((fund) => ({
       fundId: fund.fundId,
       name: fund.name,
     })),
     fundSummaries,
-    fundChart: fundSummaries.map((fund) => ({
+    fundChart: nonStockSummaries.map((fund) => ({
       fundId: fund.fundId,
       name: fund.name,
       invested: fund.totalInvested,
@@ -234,7 +282,7 @@ function buildDashboardSnapshot(
     })),
     portfolioFlowChart: buildPortfolioFlowChart(transactions, funds),
     yearlyChart: buildYearlyChart(transactions),
-    categoryChart: buildCategoryChart(fundSummaries),
+    categoryChart: buildCategoryChart(nonStockSummaries),
     transactions: transactions
       .slice()
       .sort((left, right) => sortTransactionsDescending(left, right)),
