@@ -12,6 +12,11 @@ type StockQuote = {
 };
 
 const DEFAULT_TIMEOUT_MS = 6500;
+const FX_CACHE_TTL_MS = 10 * 60 * 1000;
+const STOCK_CACHE_TTL_MS = 5 * 60 * 1000;
+
+let fxCache: { fetchedAt: number; quote: FxQuote } | null = null;
+const stockCache = new Map<string, { fetchedAt: number; quote: StockQuote }>();
 
 function formatIsoDateUtc(date: Date) {
   return date.toISOString().slice(0, 10);
@@ -74,6 +79,9 @@ function toNumber(value: unknown) {
 
 async function fetchUsdInrFx(): Promise<FxQuote> {
   const now = new Date();
+  if (fxCache && Date.now() - fxCache.fetchedAt < FX_CACHE_TTL_MS) {
+    return fxCache.quote;
+  }
 
   try {
     const payload = await fetchJson<{
@@ -88,11 +96,13 @@ async function fetchUsdInrFx(): Promise<FxQuote> {
       throw new Error("INR rate missing.");
     }
 
-    return {
+    const quote = {
       inrPerUsd,
       asOf: payload.time_last_update_utc || formatIsoDateUtc(now),
       source: "open.er-api.com",
     };
+    fxCache = { fetchedAt: Date.now(), quote };
+    return quote;
   } catch {
     const payload = await fetchJson<{
       success?: boolean;
@@ -106,11 +116,13 @@ async function fetchUsdInrFx(): Promise<FxQuote> {
       throw new Error("INR rate missing.");
     }
 
-    return {
+    const quote = {
       inrPerUsd,
       asOf: payload.date || formatIsoDateUtc(now),
       source: "exchangerate.host",
     };
+    fxCache = { fetchedAt: Date.now(), quote };
+    return quote;
   }
 }
 
@@ -154,25 +166,33 @@ async function fetchYahooQuote(ticker: string): Promise<{ price: number; time: n
 async function fetchStockQuoteUsd(ticker: string): Promise<StockQuote> {
   const now = new Date();
   const upper = ticker.trim().toUpperCase();
+  const cached = stockCache.get(upper);
+  if (cached && Date.now() - cached.fetchedAt < STOCK_CACHE_TTL_MS) {
+    return cached.quote;
+  }
 
   try {
     const symbol = `${upper.toLowerCase()}.us`;
     const { close, date } = await fetchStooqDailyClose(symbol);
-    return {
+    const quote = {
       ticker: upper,
       priceUsd: close,
       asOf: date || formatIsoDateUtc(now),
       source: "stooq.com",
     };
+    stockCache.set(upper, { fetchedAt: Date.now(), quote });
+    return quote;
   } catch {
     const { price, time } = await fetchYahooQuote(upper);
     const asOf = time ? formatIsoDateUtc(new Date(time * 1000)) : formatIsoDateUtc(now);
-    return {
+    const quote = {
       ticker: upper,
       priceUsd: price,
       asOf,
       source: "finance.yahoo.com",
     };
+    stockCache.set(upper, { fetchedAt: Date.now(), quote });
+    return quote;
   }
 }
 
@@ -189,4 +209,3 @@ export async function fetchStockInrQuote(ticker: string) {
     source: `${stock.source} + ${fx.source}`,
   };
 }
-
