@@ -42,6 +42,10 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
   const [refreshError, setRefreshError] = useState("");
   const [lastUpdatedAt, setLastUpdatedAt] = useState<number | null>(null);
   const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [flowScope, setFlowScope] = useState<
+    "all" | "mutual_funds" | "govt_schemes"
+  >("all");
+  const [flowFocus, setFlowFocus] = useState<"purchase" | "current">("current");
 
   useEffect(() => {
     setCurrentDashboard(dashboard);
@@ -118,6 +122,29 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
 
   const workbookConfigured =
     currentDashboard.workbookName !== "No workbook configured";
+
+  const flowChartData = useMemo(() => {
+    if (flowScope === "all") {
+      return currentDashboard.portfolioFlowChart;
+    }
+
+    const assetTypeByFundId = new Map(
+      currentDashboard.fundSummaries.map((fund) => [
+        fund.fundId,
+        (fund.assetType || "").toLowerCase(),
+      ])
+    );
+    const latestNavByFundId = new Map(
+      currentDashboard.fundSummaries.map((fund) => [fund.fundId, fund.latestNav])
+    );
+
+    const desiredType = flowScope === "mutual_funds" ? "mutual fund" : "govt scheme";
+    const scopedTransactions = currentDashboard.transactions.filter(
+      (transaction) => assetTypeByFundId.get(transaction.fundId) === desiredType
+    );
+
+    return buildPortfolioFlowChartScoped(scopedTransactions, latestNavByFundId);
+  }, [currentDashboard.fundSummaries, currentDashboard.portfolioFlowChart, currentDashboard.transactions, flowScope]);
 
   function applyDashboardUpdate(next: DashboardData) {
     setCurrentDashboard(next);
@@ -430,11 +457,61 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
             </div>
             <p className="muted">Current value uses the latest statement NAV for held units.</p>
           </div>
+          <div className="chart-controls">
+            <div className="toggle-group">
+              <button
+                type="button"
+                className={`toggle-pill ${flowScope === "all" ? "active" : ""}`}
+                onClick={() => setFlowScope("all")}
+              >
+                All
+              </button>
+              <button
+                type="button"
+                className={`toggle-pill ${
+                  flowScope === "mutual_funds" ? "active" : ""
+                }`}
+                onClick={() => setFlowScope("mutual_funds")}
+              >
+                Mutual funds
+              </button>
+              <button
+                type="button"
+                className={`toggle-pill ${
+                  flowScope === "govt_schemes" ? "active" : ""
+                }`}
+                onClick={() => setFlowScope("govt_schemes")}
+              >
+                Govt schemes
+              </button>
+            </div>
+
+            <div className="toggle-group">
+              <button
+                type="button"
+                className={`toggle-pill ${
+                  flowFocus === "purchase" ? "active" : ""
+                }`}
+                onClick={() => setFlowFocus("purchase")}
+              >
+                Purchase value
+              </button>
+              <button
+                type="button"
+                className={`toggle-pill ${
+                  flowFocus === "current" ? "active" : ""
+                }`}
+                onClick={() => setFlowFocus("current")}
+              >
+                Current value
+              </button>
+            </div>
+          </div>
           <div className="chart-frame">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart
                 id="portfolio-flow-chart"
-                data={currentDashboard.portfolioFlowChart}
+                data={flowChartData}
               >
                 <defs>
                   <linearGradient id="purchaseGradient" x1="0" y1="0" x2="0" y2="1">
@@ -472,7 +549,8 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
                   isAnimationActive={false}
                   name="Purchase value"
                   stroke="#22577a"
-                  fillOpacity={1}
+                  fillOpacity={flowFocus === "purchase" ? 1 : 0.18}
+                  strokeOpacity={flowFocus === "purchase" ? 1 : 0.35}
                   fill="url(#purchaseGradient)"
                   activeDot={{ r: 5, strokeWidth: 2, stroke: "#22577a", fill: "#ffffff" }}
                 />
@@ -482,7 +560,8 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
                   isAnimationActive={false}
                   name="Current value"
                   stroke="#57cc99"
-                  fillOpacity={0.9}
+                  fillOpacity={flowFocus === "current" ? 0.9 : 0.14}
+                  strokeOpacity={flowFocus === "current" ? 1 : 0.35}
                   fill="url(#currentGradient)"
                   connectNulls
                   activeDot={{ r: 5, strokeWidth: 2, stroke: "#57cc99", fill: "#ffffff" }}
@@ -493,7 +572,8 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
                   isAnimationActive={false}
                   name="Current value"
                   stroke="#c44536"
-                  fillOpacity={0.12}
+                  fillOpacity={flowFocus === "current" ? 0.14 : 0.08}
+                  strokeOpacity={flowFocus === "current" ? 1 : 0.35}
                   fill="#f5b0a7"
                   connectNulls
                   legendType="none"
@@ -943,6 +1023,73 @@ function formatPeriodLabel(value: string) {
   }
 
   return `${MONTH_LONG[monthIndex] ?? ""} ${year}`;
+}
+
+function buildPortfolioFlowChartScoped(
+  transactions: Array<{
+    transactionDate: string;
+    fundId: string;
+    direction: "Contribution" | "Redemption";
+    normalizedAmount: number;
+    units: number;
+    entryId: string;
+  }>,
+  latestNavByFundId: Map<string, number>
+) {
+  const sortedTransactions = transactions
+    .slice()
+    .filter((transaction) => Boolean(transaction.transactionDate))
+    .sort(
+      (left, right) =>
+        left.transactionDate.localeCompare(right.transactionDate) ||
+        left.entryId.localeCompare(right.entryId)
+    );
+
+  const positions = new Map<string, { costBasis: number; units: number }>();
+  const snapshots = new Map<string, { period: string; purchaseValue: number; currentValue: number }>();
+
+  let portfolioPurchaseValue = 0;
+  let portfolioCurrentValue = 0;
+
+  for (const transaction of sortedTransactions) {
+    const latestNav = latestNavByFundId.get(transaction.fundId) ?? 0;
+    const position = positions.get(transaction.fundId) ?? { costBasis: 0, units: 0 };
+
+    if (transaction.direction === "Contribution") {
+      position.costBasis += transaction.normalizedAmount;
+      position.units += transaction.units;
+      portfolioPurchaseValue += transaction.normalizedAmount;
+      portfolioCurrentValue += transaction.units * latestNav;
+    } else {
+      const averageCostPerUnit = position.units > 0 ? position.costBasis / position.units : 0;
+      const redeemedUnits = Math.min(transaction.units, position.units);
+      const costReduction = redeemedUnits * averageCostPerUnit;
+
+      position.costBasis = Math.max(0, position.costBasis - costReduction);
+      position.units = Math.max(0, position.units - transaction.units);
+      portfolioPurchaseValue = Math.max(0, portfolioPurchaseValue - costReduction);
+      portfolioCurrentValue = Math.max(0, portfolioCurrentValue - transaction.units * latestNav);
+    }
+
+    positions.set(transaction.fundId, position);
+    const period = transaction.transactionDate.slice(0, 7);
+    const purchaseValue = roundToTwo(portfolioPurchaseValue);
+    const currentValue = roundToTwo(portfolioCurrentValue);
+
+    snapshots.set(period, { period, purchaseValue, currentValue });
+  }
+
+  return Array.from(snapshots.values())
+    .sort((left, right) => left.period.localeCompare(right.period))
+    .map((snapshot) => ({
+      ...snapshot,
+      currentValueGain: snapshot.currentValue >= snapshot.purchaseValue ? snapshot.currentValue : null,
+      currentValueLoss: snapshot.currentValue < snapshot.purchaseValue ? snapshot.currentValue : null,
+    }));
+}
+
+function roundToTwo(value: number) {
+  return Number(value.toFixed(2));
 }
 
 const MONTH_SHORT = [

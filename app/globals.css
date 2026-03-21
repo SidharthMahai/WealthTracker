@@ -254,6 +254,35 @@ code {
   font-weight: 800;
 }
 
+.chart-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: space-between;
+  margin: 16px 0 6px;
+}
+
+.toggle-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.toggle-pill {
+  border: 1px solid rgba(34, 87, 122, 0.18);
+  border-radius: 999px;
+  padding: 8px 12px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font-weight: 650;
+}
+
+.toggle-pill.active {
+  border-color: rgba(34, 87, 122, 0.45);
+  background: rgba(34, 87, 122, 0.08);
+}
+
 .metric-positive h2 {
   color: var(--positive);
 }
