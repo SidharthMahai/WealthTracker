@@ -543,6 +543,7 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
               <tr>
                 <th>Fund</th>
                 <th>Category</th>
+                <th>Type</th>
                 <th>Purchase Value</th>
                 <th>Current Value</th>
                 <th>Profit or Loss</th>
@@ -557,6 +558,7 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
                     <span className="subtle-line">Folio {fund.folioNumber}</span>
                   </td>
                   <td>{fund.category}</td>
+                  <td>{fund.assetType || "—"}</td>
                   <td className="numeric-cell">{formatInrFull(fund.totalInvested)}</td>
                   <td className="numeric-cell">{formatInrFull(fund.currentValue)}</td>
                   <td

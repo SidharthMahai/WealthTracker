@@ -617,8 +617,9 @@ function extractPdfText(pdfPath) {
     encoding: "utf8",
     env: {
       ...process.env,
-      SWIFT_MODULE_CACHE_PATH: "/tmp/swift-module-cache",
-      CLANG_MODULE_CACHE_PATH: "/tmp/swift-module-cache",
+      HOME: "/tmp/wealthtracker-home",
+      SWIFT_MODULE_CACHE_PATH: "/tmp/wealthtracker-module-cache",
+      CLANG_MODULE_CACHE_PATH: "/tmp/wealthtracker-module-cache",
     },
   });
 }

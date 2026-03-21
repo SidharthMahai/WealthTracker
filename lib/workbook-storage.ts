@@ -35,7 +35,10 @@ async function downloadWorkbookBlobToTemp(
   pathname: string,
   access: WorkbookAccess
 ): Promise<string | null> {
-  const result = await get(pathname, { access });
+  let result = await get(pathname, { access });
+  if ((!result || result.statusCode !== 200 || !result.stream) && access === "private") {
+    result = await get(pathname, { access: "public" });
+  }
   if (!result || result.statusCode !== 200 || !result.stream) {
     return null;
   }
@@ -106,11 +109,34 @@ export async function persistWorkbookIfBlob(context: WorkbookContext) {
 
   const fileBuffer = fs.readFileSync(context.localPath);
 
-  await put(context.blobPathname, new Blob([fileBuffer], { type: XLSX_CONTENT_TYPE }), {
-    access: context.blobAccess,
-    addRandomSuffix: false,
-    allowOverwrite: true,
-    contentType: XLSX_CONTENT_TYPE,
-    cacheControlMaxAge: 0,
-  });
+  try {
+    await put(
+      context.blobPathname,
+      new Blob([fileBuffer], { type: XLSX_CONTENT_TYPE }),
+      {
+        access: context.blobAccess,
+        addRandomSuffix: false,
+        allowOverwrite: true,
+        contentType: XLSX_CONTENT_TYPE,
+        cacheControlMaxAge: 0,
+      }
+    );
+  } catch (error) {
+    if (context.blobAccess !== "public") {
+      await put(
+        context.blobPathname,
+        new Blob([fileBuffer], { type: XLSX_CONTENT_TYPE }),
+        {
+          access: "public",
+          addRandomSuffix: false,
+          allowOverwrite: true,
+          contentType: XLSX_CONTENT_TYPE,
+          cacheControlMaxAge: 0,
+        }
+      );
+      return;
+    }
+
+    throw error;
+  }
 }

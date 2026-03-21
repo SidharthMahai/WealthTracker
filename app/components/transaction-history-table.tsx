@@ -583,7 +583,11 @@ export function TransactionHistoryTable({
           <tfoot>
             <tr>
               <td colSpan={6}>
-                <strong>Filtered totals (net invested)</strong>
+                <strong>Filtered totals</strong>
+                <span className="subtle-line">
+                  Contribution {formatInrFull(totals.contributions)} · Redemption{" "}
+                  {formatInrFull(totals.redemptions)}
+                </span>
               </td>
               <td className="numeric-cell">
                 <strong>{formatInrFull(totals.amount)}</strong>

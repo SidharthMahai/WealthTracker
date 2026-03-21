@@ -16,6 +16,7 @@ import type {
   TransactionRecord,
 } from "@/lib/types";
 import type { WorkbookContext } from "@/lib/workbook-storage";
+import { fetchStockInrQuote } from "@/lib/market-data";
 
 const DEFAULT_WORKBOOK_PATH = path.join(process.cwd(), "data", "Investment-Tracker.xlsx");
 
@@ -64,7 +65,8 @@ export async function getDashboardData(): Promise<DashboardData> {
     return buildEmptyDashboardData();
   }
   const { funds, transactions } = readPortfolioWorkbook(workbookContext.localPath);
-  return buildDashboardSnapshot(workbookContext, funds, transactions);
+  const hydratedFunds = await hydrateFundsWithLiveMarketData(funds);
+  return buildDashboardSnapshot(workbookContext, hydratedFunds, transactions);
 }
 
 export async function addTransaction(input: NewTransactionInput) {
@@ -92,10 +94,11 @@ export async function addTransaction(input: NewTransactionInput) {
   writePortfolioWorkbook(workbookPath, workbook, funds, updatedTransactions);
   await persistWorkbookIfBlob(workbookContext);
 
+  const hydratedFunds = await hydrateFundsWithLiveMarketData(funds);
   return {
     entryId: newEntryId,
     rowId: newRowId,
-    dashboard: buildDashboardSnapshot(workbookContext, funds, updatedTransactions),
+    dashboard: buildDashboardSnapshot(workbookContext, hydratedFunds, updatedTransactions),
   };
 }
 
@@ -134,10 +137,11 @@ export async function updateTransaction(
 
   writePortfolioWorkbook(workbookPath, workbook, funds, updatedTransactions);
   await persistWorkbookIfBlob(workbookContext);
+  const hydratedFunds = await hydrateFundsWithLiveMarketData(funds);
   return {
     entryId: existingTransaction.entryId,
     rowId: existingTransaction.rowId,
-    dashboard: buildDashboardSnapshot(workbookContext, funds, updatedTransactions),
+    dashboard: buildDashboardSnapshot(workbookContext, hydratedFunds, updatedTransactions),
   };
 }
 
@@ -159,10 +163,42 @@ export async function deleteTransaction(rowId: string) {
 
   writePortfolioWorkbook(workbookPath, workbook, funds, updatedTransactions);
   await persistWorkbookIfBlob(workbookContext);
+  const hydratedFunds = await hydrateFundsWithLiveMarketData(funds);
   return {
     rowId,
-    dashboard: buildDashboardSnapshot(workbookContext, funds, updatedTransactions),
+    dashboard: buildDashboardSnapshot(workbookContext, hydratedFunds, updatedTransactions),
   };
+}
+
+async function hydrateFundsWithLiveMarketData(funds: FundRecord[]): Promise<FundRecord[]> {
+  const stockFunds = funds.filter(
+    (fund) => (fund.assetType || "").toLowerCase() === "stock"
+  );
+  if (stockFunds.length === 0) {
+    return funds;
+  }
+
+  const byFundId = new Map<string, string>([["STOCK-XOM", "XOM"]]);
+  const cloned = funds.map((fund) => ({ ...fund }));
+
+  await Promise.all(
+    cloned.map(async (fund) => {
+      const ticker = byFundId.get(fund.fundId);
+      if (!ticker) {
+        return;
+      }
+
+      try {
+        const quote = await fetchStockInrQuote(ticker);
+        fund.latestNav = roundToTwo(quote.priceInr);
+        fund.latestNavDate = new Date().toISOString().slice(0, 10);
+      } catch {
+        // Keep workbook-provided latestNav if live fetch fails.
+      }
+    })
+  );
+
+  return cloned;
 }
 
 function buildDashboardSnapshot(
@@ -220,6 +256,7 @@ function buildTransactionRecord({
   input: TransactionInput;
 }): TransactionRecord {
   const amountInvested = roundToTwo(input.amountInvested);
+  const normalizedAmount = normalizeCashAmount(amountInvested);
 
   return {
     rowId,
@@ -230,7 +267,7 @@ function buildTransactionRecord({
     fundName: selectedFund.name,
     transactionType: input.transactionType,
     direction: input.direction,
-    normalizedAmount: Math.round(amountInvested),
+    normalizedAmount,
     cashAmountExact: amountInvested,
     statementAmount: amountInvested,
     charges: existingTransaction?.charges ?? 0,
@@ -842,4 +879,18 @@ function sumBy<T>(items: T[], getter: (item: T) => number) {
 
 function roundToTwo(value: number) {
   return Number(value.toFixed(2));
+}
+
+function normalizeCashAmount(value: number) {
+  const rounded = Math.round(value);
+  return snapNearMultiple(rounded, 100, 2);
+}
+
+function snapNearMultiple(value: number, multiple: number, tolerance: number) {
+  if (multiple <= 1) {
+    return value;
+  }
+
+  const snapped = Math.round(value / multiple) * multiple;
+  return Math.abs(value - snapped) <= tolerance ? snapped : value;
 }
