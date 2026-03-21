@@ -146,6 +146,13 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
     );
   }, [currentDashboard.transactions, fundMetaById]);
 
+  const netWorthTone =
+    currentDashboard.metrics.mutualFundProfitLoss +
+      currentDashboard.metrics.schemeInterestCredited >=
+    0
+      ? "positive"
+      : "negative";
+
   const flowChartData = useMemo(() => {
     if (flowScope === "all") {
       return currentDashboard.portfolioFlowChart;
@@ -307,6 +314,7 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
           label="Net worth (current)"
           value={formatInrCompact(currentDashboard.metrics.netWorthCurrentValue)}
           detail={formatInrFull(currentDashboard.metrics.netWorthCurrentValue)}
+          tone={netWorthTone}
         />
         <MetricCard
           label="Mutual funds (purchase)"
