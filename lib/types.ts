@@ -72,6 +72,7 @@ export type DashboardData = {
     schemePurchaseValue: number;
     schemeCurrentValue: number;
     schemeInterestCredited: number;
+    schemeAbsoluteReturn: number;
     stockCurrentValue: number;
     netWorthCurrentValue: number;
   };

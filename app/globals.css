@@ -249,6 +249,11 @@ code {
   font-size: 0.95rem;
 }
 
+.metric-detail strong {
+  color: var(--text);
+  font-weight: 800;
+}
+
 .metric-positive h2 {
   color: var(--positive);
 }

@@ -266,14 +266,26 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
         <MetricCard
           label="Mutual funds (current)"
           value={formatInrCompact(currentDashboard.metrics.mutualFundCurrentValue)}
-          detail={formatInrFull(currentDashboard.metrics.mutualFundCurrentValue)}
+          detail={
+            <>
+              <strong>
+                Return {formatPercent(currentDashboard.metrics.mutualFundAbsoluteReturn)}
+              </strong>{" "}
+              · {formatInrFull(currentDashboard.metrics.mutualFundCurrentValue)}
+            </>
+          }
         />
         <MetricCard
           label="Mutual funds (profit/loss)"
           value={formatInrCompact(currentDashboard.metrics.mutualFundProfitLoss)}
-          detail={`${formatInrFull(
-            currentDashboard.metrics.mutualFundProfitLoss
-          )} · ${formatPercent(currentDashboard.metrics.mutualFundAbsoluteReturn)}`}
+          detail={
+            <>
+              <strong>
+                Return {formatPercent(currentDashboard.metrics.mutualFundAbsoluteReturn)}
+              </strong>{" "}
+              · {formatInrFull(currentDashboard.metrics.mutualFundProfitLoss)}
+            </>
+          }
           tone={
             currentDashboard.metrics.mutualFundProfitLoss >= 0 ? "positive" : "negative"
           }
@@ -292,12 +304,26 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
         <MetricCard
           label="Govt schemes (current)"
           value={formatInrCompact(currentDashboard.metrics.schemeCurrentValue)}
-          detail={formatInrFull(currentDashboard.metrics.schemeCurrentValue)}
+          detail={
+            <>
+              <strong>
+                Return {formatPercent(currentDashboard.metrics.schemeAbsoluteReturn)}
+              </strong>{" "}
+              · {formatInrFull(currentDashboard.metrics.schemeCurrentValue)}
+            </>
+          }
         />
         <MetricCard
           label="Govt schemes (interest)"
           value={formatInrCompact(currentDashboard.metrics.schemeInterestCredited)}
-          detail={formatInrFull(currentDashboard.metrics.schemeInterestCredited)}
+          detail={
+            <>
+              <strong>
+                Return {formatPercent(currentDashboard.metrics.schemeAbsoluteReturn)}
+              </strong>{" "}
+              · {formatInrFull(currentDashboard.metrics.schemeInterestCredited)}
+            </>
+          }
           tone={
             currentDashboard.metrics.schemeInterestCredited >= 0 ? "positive" : "negative"
           }
@@ -714,7 +740,7 @@ function MetricCard({
 }: {
   label: string;
   value: string;
-  detail?: string;
+  detail?: React.ReactNode;
   tone?: "neutral" | "positive" | "negative";
 }) {
   return (

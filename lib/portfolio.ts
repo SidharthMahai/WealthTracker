@@ -57,6 +57,7 @@ function buildEmptyDashboardData(): DashboardData {
       schemePurchaseValue: 0,
       schemeCurrentValue: 0,
       schemeInterestCredited: 0,
+      schemeAbsoluteReturn: 0,
       stockCurrentValue: 0,
       netWorthCurrentValue: 0,
     },
@@ -274,6 +275,8 @@ function buildDashboardSnapshot(
   const schemePurchaseValue = sumBy(schemeSummaries, (fund) => fund.totalInvested);
   const schemeCurrentValue = sumBy(schemeSummaries, (fund) => fund.currentValue);
   const schemeInterestCredited = sumBy(schemeSummaries, (fund) => fund.profitLoss);
+  const schemeAbsoluteReturn =
+    schemePurchaseValue === 0 ? 0 : schemeInterestCredited / schemePurchaseValue;
 
   const stockCurrentValue = sumBy(stockSummaries, (fund) => fund.currentValue);
   const netWorthCurrentValue = sumBy(fundSummaries, (fund) => fund.currentValue);
@@ -289,6 +292,7 @@ function buildDashboardSnapshot(
       schemePurchaseValue,
       schemeCurrentValue,
       schemeInterestCredited,
+      schemeAbsoluteReturn,
       stockCurrentValue,
       netWorthCurrentValue,
     },
