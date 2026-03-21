@@ -448,7 +448,7 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
         </div>
       </section>
 
-      <section className="content-grid">
+      <section className="wide-grid">
         <div className="panel chart-panel">
           <div className="panel-heading">
             <div>
@@ -583,17 +583,19 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
             </ResponsiveContainer>
           </div>
         </div>
+      </section>
 
-        {workbookConfigured ? (
+      {workbookConfigured ? (
+        <section className="wide-grid">
           <AddInvestmentForm
             funds={currentDashboard.funds}
             onSaved={refreshDashboard}
             onDashboardUpdated={applyDashboardUpdate}
           />
-        ) : null}
-      </section>
+        </section>
+      ) : null}
 
-      <section className="content-grid">
+      <section className="wide-grid">
         <div className="panel chart-panel">
           <div className="panel-heading">
             <div>
@@ -602,14 +604,24 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
             </div>
             <p className="muted">One bar for each financial year&apos;s total invested amount.</p>
           </div>
-          <div className="chart-frame">
+          <div className="chart-frame yearly-chart-frame">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
                 id="yearly-contrib-chart"
                 data={currentDashboard.yearlyChart}
+                margin={{ top: 22, right: 16, left: 6, bottom: 58 }}
               >
                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="financialYear" tickLine={false} axisLine={false} />
+                <XAxis
+                  dataKey="financialYear"
+                  tickLine={false}
+                  axisLine={false}
+                  interval={0}
+                  angle={-45}
+                  textAnchor="end"
+                  height={90}
+                  tickMargin={16}
+                />
                 <YAxis
                   tickFormatter={(value) => formatAxisLakhs(value)}
                   tickLine={false}
@@ -643,15 +655,17 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
             </ResponsiveContainer>
           </div>
         </div>
+      </section>
 
+      <section className="wide-grid">
         <div className="panel chart-panel">
-          <div className="panel-heading">
-            <div>
-              <p className="eyebrow">Allocation</p>
-              <h2>Current value by category</h2>
+            <div className="panel-heading">
+              <div>
+                <p className="eyebrow">Allocation</p>
+                <h2>Current value by category</h2>
+              </div>
+              <p className="muted">Category values are shown here even without hover.</p>
             </div>
-            <p className="muted">Category values are shown here even without hover.</p>
-          </div>
 
           <div className="allocation-layout">
             <div className="allocation-chart">

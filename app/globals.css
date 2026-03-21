@@ -628,9 +628,17 @@ tfoot td {
   height: 380px;
 }
 
+.yearly-chart-frame {
+  height: 420px;
+}
+
 @media (max-width: 720px) {
   .nav-chart-frame {
     height: 300px;
+  }
+
+  .yearly-chart-frame {
+    height: 320px;
   }
 }
 
