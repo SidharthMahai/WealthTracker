@@ -615,6 +615,11 @@ td {
   letter-spacing: 0.01em;
 }
 
+.fy-col {
+  white-space: nowrap;
+  min-width: 110px;
+}
+
 th {
   color: var(--muted);
   font-size: 0.88rem;

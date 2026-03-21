@@ -435,7 +435,7 @@ export function TransactionHistoryTable({
           <thead>
             <tr>
               <th>Date</th>
-              <th>FY</th>
+              <th className="fy-col">FY</th>
               <th>Fund</th>
               <th>Type</th>
               <th>Direction</th>
@@ -478,7 +478,7 @@ export function TransactionHistoryTable({
                         }
                       />
                     </td>
-                    <td className="numeric-cell">
+                    <td className="numeric-cell fy-col">
                       {getFinancialYearLabel(draft.transactionDate)}
                     </td>
                     <td>
@@ -573,7 +573,7 @@ export function TransactionHistoryTable({
                   <td className="numeric-cell">
                     {formatFriendlyDate(transaction.transactionDate)}
                   </td>
-                  <td className="numeric-cell">{transaction.financialYear}</td>
+                  <td className="numeric-cell fy-col">{transaction.financialYear}</td>
                   <td>{transaction.fundName}</td>
                   <td>{transaction.transactionType}</td>
                   <td>{transaction.direction}</td>
