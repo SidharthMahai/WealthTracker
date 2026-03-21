@@ -415,10 +415,6 @@ code {
   background: color-mix(in srgb, var(--bg-overlay) 75%, var(--panel) 25%);
 }
 
-.allocation-item.is-dimmed {
-  opacity: 0.6;
-}
-
 .allocation-item p {
   margin: 4px 0 0;
   color: var(--muted);

@@ -779,11 +779,7 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
                 return (
                   <div
                     className={`allocation-item ${
-                      activeAllocationIndex === index
-                        ? "is-active"
-                        : activeAllocationIndex === null
-                          ? ""
-                          : "is-dimmed"
+                      activeAllocationIndex === index ? "is-active" : ""
                     }`}
                     key={category.category}
                     onMouseEnter={() => setActiveAllocationIndex(index)}
