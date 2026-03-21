@@ -268,10 +268,10 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
           value={formatInrCompact(currentDashboard.metrics.mutualFundCurrentValue)}
           detail={
             <>
+              {formatInrFull(currentDashboard.metrics.mutualFundCurrentValue)} ·{" "}
               <strong>
                 Return {formatPercent(currentDashboard.metrics.mutualFundAbsoluteReturn)}
-              </strong>{" "}
-              · {formatInrFull(currentDashboard.metrics.mutualFundCurrentValue)}
+              </strong>
             </>
           }
         />
@@ -280,10 +280,10 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
           value={formatInrCompact(currentDashboard.metrics.mutualFundProfitLoss)}
           detail={
             <>
+              {formatInrFull(currentDashboard.metrics.mutualFundProfitLoss)} ·{" "}
               <strong>
                 Return {formatPercent(currentDashboard.metrics.mutualFundAbsoluteReturn)}
-              </strong>{" "}
-              · {formatInrFull(currentDashboard.metrics.mutualFundProfitLoss)}
+              </strong>
             </>
           }
           tone={
@@ -306,10 +306,10 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
           value={formatInrCompact(currentDashboard.metrics.schemeCurrentValue)}
           detail={
             <>
+              {formatInrFull(currentDashboard.metrics.schemeCurrentValue)} ·{" "}
               <strong>
                 Return {formatPercent(currentDashboard.metrics.schemeAbsoluteReturn)}
-              </strong>{" "}
-              · {formatInrFull(currentDashboard.metrics.schemeCurrentValue)}
+              </strong>
             </>
           }
         />
@@ -318,10 +318,10 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
           value={formatInrCompact(currentDashboard.metrics.schemeInterestCredited)}
           detail={
             <>
+              {formatInrFull(currentDashboard.metrics.schemeInterestCredited)} ·{" "}
               <strong>
                 Return {formatPercent(currentDashboard.metrics.schemeAbsoluteReturn)}
-              </strong>{" "}
-              · {formatInrFull(currentDashboard.metrics.schemeInterestCredited)}
+              </strong>
             </>
           }
           tone={
