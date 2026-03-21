@@ -12,6 +12,7 @@ import {
   Pie,
   PieChart,
   ResponsiveContainer,
+  Sector,
   Tooltip,
   XAxis,
   YAxis,
@@ -42,6 +43,9 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
   const [refreshError, setRefreshError] = useState("");
   const [lastUpdatedAt, setLastUpdatedAt] = useState<number | null>(null);
   const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [activeAllocationIndex, setActiveAllocationIndex] = useState<number | null>(
+    null
+  );
   const [flowScope, setFlowScope] = useState<
     "all" | "mutual_funds" | "govt_schemes"
   >("all");
@@ -122,6 +126,25 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
 
   const workbookConfigured =
     currentDashboard.workbookName !== "No workbook configured";
+
+  const fundMetaById = useMemo(() => {
+    return new Map(
+      currentDashboard.funds.map((fund) => [
+        fund.fundId,
+        {
+          name: fund.name,
+          assetType: fund.assetType,
+        },
+      ])
+    );
+  }, [currentDashboard.funds]);
+
+  const yearlyContributionBreakdown = useMemo(() => {
+    return buildYearlyContributionBreakdown(
+      currentDashboard.transactions,
+      fundMetaById
+    );
+  }, [currentDashboard.transactions, fundMetaById]);
 
   const flowChartData = useMemo(() => {
     if (flowScope === "all") {
@@ -629,7 +652,47 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
                 />
                 <Tooltip
                   cursor={{ fill: "rgba(34, 87, 122, 0.05)" }}
-                  formatter={(value: number) => [formatInrFull(value), "Invested"]}
+                  content={({ active, label }) => {
+                    if (!active || !label) {
+                      return null;
+                    }
+
+                    const financialYear = String(label);
+                    const breakdown =
+                      yearlyContributionBreakdown.get(financialYear) ?? null;
+
+                    return (
+                      <div className="chart-tooltip">
+                        <p className="chart-tooltip-title">{financialYear}</p>
+                        <p className="chart-tooltip-row">
+                          Total invested:{" "}
+                          <strong>
+                            {formatInrFull(
+                              breakdown?.total ??
+                                yearlyChartValueForLabel(
+                                  currentDashboard.yearlyChart,
+                                  financialYear
+                                )
+                            )}
+                          </strong>
+                        </p>
+                        {breakdown ? (
+                          <>
+                            <p className="chart-tooltip-row">
+                              Mutual funds:{" "}
+                              <strong>{formatInrFull(breakdown.mutualFunds)}</strong>
+                            </p>
+                            <p className="chart-tooltip-row">
+                              PPF: <strong>{formatInrFull(breakdown.ppf)}</strong>
+                            </p>
+                            <p className="chart-tooltip-row">
+                              EPF: <strong>{formatInrFull(breakdown.epf)}</strong>
+                            </p>
+                          </>
+                        ) : null}
+                      </div>
+                    );
+                  }}
                 />
                 <Bar
                   dataKey="contributions"
@@ -679,6 +742,12 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
                     innerRadius={62}
                     outerRadius={106}
                     paddingAngle={4}
+                    activeIndex={
+                      activeAllocationIndex === null ? undefined : activeAllocationIndex
+                    }
+                    activeShape={renderActiveAllocationShape}
+                    onMouseEnter={(_, index) => setActiveAllocationIndex(index)}
+                    onMouseLeave={() => setActiveAllocationIndex(null)}
                     labelLine
                     label={renderAllocationOutsidePercentLabel}
                   >
@@ -703,7 +772,14 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
                       currentDashboard.metrics.netWorthCurrentValue;
 
                 return (
-                  <div className="allocation-item" key={category.category}>
+                  <div
+                    className={`allocation-item ${
+                      activeAllocationIndex === index ? "is-active" : ""
+                    }`}
+                    key={category.category}
+                    onMouseEnter={() => setActiveAllocationIndex(index)}
+                    onMouseLeave={() => setActiveAllocationIndex(null)}
+                  >
                     <span
                       className="allocation-swatch"
                       style={{
@@ -932,14 +1008,116 @@ function renderAllocationOutsidePercentLabel(props: {
       dominantBaseline="central"
       style={{
         fill: "var(--text)",
-        fontSize: 13,
-        fontWeight: 700,
+        fontSize: 14,
+        fontWeight: 800,
         pointerEvents: "none",
       }}
     >
       {label}
     </text>
   );
+}
+
+function renderActiveAllocationShape(props: {
+  cx?: number;
+  cy?: number;
+  innerRadius?: number;
+  outerRadius?: number;
+  startAngle?: number;
+  endAngle?: number;
+  fill?: string;
+}) {
+  const {
+    cx,
+    cy,
+    innerRadius = 0,
+    outerRadius = 0,
+    startAngle,
+    endAngle,
+    fill,
+  } = props;
+
+  return (
+    <Sector
+      cx={cx}
+      cy={cy}
+      innerRadius={innerRadius}
+      outerRadius={outerRadius + 10}
+      startAngle={startAngle}
+      endAngle={endAngle}
+      fill={fill}
+      style={{ filter: "drop-shadow(0px 10px 22px rgba(15, 23, 42, 0.18))" }}
+    />
+  );
+}
+
+type YearlyContributionBreakdown = {
+  financialYear: string;
+  total: number;
+  mutualFunds: number;
+  ppf: number;
+  epf: number;
+};
+
+function buildYearlyContributionBreakdown(
+  transactions: DashboardData["transactions"],
+  fundMetaById: Map<string, { name: string; assetType: string }>
+) {
+  const result = new Map<string, YearlyContributionBreakdown>();
+
+  for (const transaction of transactions) {
+    if (transaction.direction !== "Contribution") {
+      continue;
+    }
+
+    const financialYear = transaction.financialYear;
+    const amount = Number.isFinite(transaction.normalizedAmount)
+      ? transaction.normalizedAmount
+      : 0;
+    if (!financialYear || amount === 0) {
+      continue;
+    }
+
+    const breakdown =
+      result.get(financialYear) ??
+      ({
+        financialYear,
+        total: 0,
+        mutualFunds: 0,
+        ppf: 0,
+        epf: 0,
+      } satisfies YearlyContributionBreakdown);
+
+    breakdown.total += amount;
+
+    const meta = fundMetaById.get(transaction.fundId);
+    const assetType = (meta?.assetType ?? "").toLowerCase();
+    const name = (meta?.name ?? transaction.fundName ?? "").toLowerCase();
+
+    if (assetType === "mutual fund") {
+      breakdown.mutualFunds += amount;
+    } else if (assetType === "govt scheme") {
+      if (name.includes("ppf") || name.includes("public provident")) {
+        breakdown.ppf += amount;
+      } else if (name.includes("epf") || name.includes("employee provident")) {
+        breakdown.epf += amount;
+      } else if (name.includes("provident fund")) {
+        breakdown.epf += amount;
+      }
+    }
+
+    result.set(financialYear, breakdown);
+  }
+
+  return result;
+}
+
+function yearlyChartValueForLabel(
+  yearlyChart: DashboardData["yearlyChart"],
+  label: string
+) {
+  const match = yearlyChart.find((row) => row.financialYear === label);
+  return match ? match.contributions : 0;
 }
 
 function renderFundTick(props: {

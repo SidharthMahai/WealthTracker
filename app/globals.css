@@ -317,7 +317,7 @@ code {
 }
 
 .chart-frame {
-  height: 360px;
+  height: 380px;
 }
 
 .wide-chart-frame {
@@ -344,31 +344,75 @@ code {
   border-radius: 999px;
 }
 
+.chart-tooltip {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 10px 12px;
+  box-shadow: var(--shadow);
+}
+
+.chart-tooltip-title {
+  margin: 0 0 8px;
+  font-weight: 850;
+}
+
+.chart-tooltip-row {
+  margin: 4px 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.chart-tooltip-row strong {
+  color: var(--text);
+  font-weight: 850;
+}
+
 .allocation-layout {
   display: grid;
-  grid-template-columns: minmax(320px, 1fr) minmax(280px, 360px);
+  grid-template-columns: minmax(420px, 520px) 1fr;
   gap: 18px;
   align-items: start;
 }
 
 .allocation-chart {
-  height: 340px;
+  height: 320px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
   overflow: visible;
 }
 
 .allocation-legend {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px 12px;
+  align-content: start;
 }
 
 .allocation-item {
   display: flex;
   gap: 12px;
   align-items: flex-start;
-  padding: 12px 14px;
+  padding: 10px 12px;
   border-radius: 16px;
   background: var(--bg-overlay);
+  cursor: pointer;
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease,
+    background 160ms ease;
+}
+
+.allocation-item:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08);
+}
+
+.allocation-item.is-active {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.12);
+  background: color-mix(in srgb, var(--bg-overlay) 75%, var(--panel) 25%);
 }
 
 .allocation-item p {
@@ -382,6 +426,12 @@ code {
   border-radius: 999px;
   margin-top: 6px;
   flex: 0 0 auto;
+}
+
+@media (max-width: 1120px) {
+  .allocation-legend {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .form-panel {
@@ -629,7 +679,7 @@ tfoot td {
 }
 
 .yearly-chart-frame {
-  height: 420px;
+  height: 380px;
 }
 
 @media (max-width: 720px) {
