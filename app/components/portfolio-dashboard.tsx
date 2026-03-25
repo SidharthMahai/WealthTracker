@@ -861,7 +861,14 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
                   <td className="numeric-cell">
                     {fund.assetType === "Stock" ? "—" : formatInrFull(fund.totalInvested)}
                   </td>
-                  <td className="numeric-cell">{formatInrFull(fund.currentValue)}</td>
+                  <td className="numeric-cell">
+                    {formatInrFull(fund.currentValue)}
+                    {fund.assetType === "Stock" && fund.stockPriceUsd ? (
+                      <span className="subtle-line">
+                        1 share: {formatUsd(fund.stockPriceUsd)}
+                      </span>
+                    ) : null}
+                  </td>
                   <td
                     className={`numeric-cell ${
                       fund.profitLoss >= 0 ? "text-positive" : "text-negative"
@@ -934,6 +941,15 @@ function formatInrFull(value: number) {
     style: "currency",
     currency: "INR",
     maximumFractionDigits: 0,
+  }).format(value);
+}
+
+function formatUsd(value: number) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   }).format(value);
 }
 

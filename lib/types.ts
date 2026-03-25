@@ -45,6 +45,9 @@ export type FundSummary = {
   statementDate: string;
   currentUnits: number;
   latestNav: number;
+  stockPriceUsd?: number;
+  stockFxInrPerUsd?: number;
+  stockAsOf?: string;
   totalContributions: number;
   totalRedemptions: number;
   netCashFlow: number;

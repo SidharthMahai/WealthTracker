@@ -77,8 +77,14 @@ export async function getDashboardData(): Promise<DashboardData> {
     return buildEmptyDashboardData();
   }
   const { funds, transactions } = readPortfolioWorkbook(workbookContext.localPath);
-  const hydratedFunds = await hydrateFundsWithLiveMarketData(funds);
-  return buildDashboardSnapshot(workbookContext, hydratedFunds, transactions);
+  const { funds: hydratedFunds, stockQuotesByFundId } =
+    await hydrateFundsWithLiveMarketData(funds);
+  return buildDashboardSnapshot(
+    workbookContext,
+    hydratedFunds,
+    transactions,
+    stockQuotesByFundId
+  );
 }
 
 export async function addTransaction(input: NewTransactionInput) {
@@ -106,11 +112,17 @@ export async function addTransaction(input: NewTransactionInput) {
   writePortfolioWorkbook(workbookPath, workbook, funds, updatedTransactions);
   await persistWorkbookIfBlob(workbookContext);
 
-  const hydratedFunds = await hydrateFundsWithLiveMarketData(funds);
+  const { funds: hydratedFunds, stockQuotesByFundId } =
+    await hydrateFundsWithLiveMarketData(funds);
   return {
     entryId: newEntryId,
     rowId: newRowId,
-    dashboard: buildDashboardSnapshot(workbookContext, hydratedFunds, updatedTransactions),
+    dashboard: buildDashboardSnapshot(
+      workbookContext,
+      hydratedFunds,
+      updatedTransactions,
+      stockQuotesByFundId
+    ),
   };
 }
 
@@ -149,11 +161,17 @@ export async function updateTransaction(
 
   writePortfolioWorkbook(workbookPath, workbook, funds, updatedTransactions);
   await persistWorkbookIfBlob(workbookContext);
-  const hydratedFunds = await hydrateFundsWithLiveMarketData(funds);
+  const { funds: hydratedFunds, stockQuotesByFundId } =
+    await hydrateFundsWithLiveMarketData(funds);
   return {
     entryId: existingTransaction.entryId,
     rowId: existingTransaction.rowId,
-    dashboard: buildDashboardSnapshot(workbookContext, hydratedFunds, updatedTransactions),
+    dashboard: buildDashboardSnapshot(
+      workbookContext,
+      hydratedFunds,
+      updatedTransactions,
+      stockQuotesByFundId
+    ),
   };
 }
 
@@ -175,10 +193,16 @@ export async function deleteTransaction(rowId: string) {
 
   writePortfolioWorkbook(workbookPath, workbook, funds, updatedTransactions);
   await persistWorkbookIfBlob(workbookContext);
-  const hydratedFunds = await hydrateFundsWithLiveMarketData(funds);
+  const { funds: hydratedFunds, stockQuotesByFundId } =
+    await hydrateFundsWithLiveMarketData(funds);
   return {
     rowId,
-    dashboard: buildDashboardSnapshot(workbookContext, hydratedFunds, updatedTransactions),
+    dashboard: buildDashboardSnapshot(
+      workbookContext,
+      hydratedFunds,
+      updatedTransactions,
+      stockQuotesByFundId
+    ),
   };
 }
 
@@ -211,23 +235,35 @@ export async function updateFundLatestNav(input: {
   writePortfolioWorkbook(workbookPath, workbook, funds, transactions);
   await persistWorkbookIfBlob(workbookContext);
 
-  const hydratedFunds = await hydrateFundsWithLiveMarketData(funds);
+  const { funds: hydratedFunds, stockQuotesByFundId } =
+    await hydrateFundsWithLiveMarketData(funds);
   return {
     fundId: fund.fundId,
-    dashboard: buildDashboardSnapshot(workbookContext, hydratedFunds, transactions),
+    dashboard: buildDashboardSnapshot(
+      workbookContext,
+      hydratedFunds,
+      transactions,
+      stockQuotesByFundId
+    ),
   };
 }
 
-async function hydrateFundsWithLiveMarketData(funds: FundRecord[]): Promise<FundRecord[]> {
+type StockInrQuote = Awaited<ReturnType<typeof fetchStockInrQuote>>;
+
+async function hydrateFundsWithLiveMarketData(funds: FundRecord[]): Promise<{
+  funds: FundRecord[];
+  stockQuotesByFundId: Map<string, StockInrQuote>;
+}> {
   const stockFunds = funds.filter(
     (fund) => (fund.assetType || "").toLowerCase() === "stock"
   );
   if (stockFunds.length === 0) {
-    return funds;
+    return { funds, stockQuotesByFundId: new Map() };
   }
 
   const byFundId = new Map<string, string>([["STOCK-XOM", "XOM"]]);
   const cloned = funds.map((fund) => ({ ...fund }));
+  const stockQuotesByFundId = new Map<string, StockInrQuote>();
 
   await Promise.all(
     cloned.map(async (fund) => {
@@ -240,21 +276,40 @@ async function hydrateFundsWithLiveMarketData(funds: FundRecord[]): Promise<Fund
         const quote = await fetchStockInrQuote(ticker);
         fund.latestNav = roundToTwo(quote.priceInr);
         fund.latestNavDate = new Date().toISOString().slice(0, 10);
+        stockQuotesByFundId.set(fund.fundId, quote);
       } catch {
         // Keep workbook-provided latestNav if live fetch fails.
       }
     })
   );
 
-  return cloned;
+  return { funds: cloned, stockQuotesByFundId };
 }
 
 function buildDashboardSnapshot(
   workbookContext: WorkbookContext,
   funds: FundRecord[],
-  transactions: TransactionRecord[]
+  transactions: TransactionRecord[],
+  stockQuotesByFundId?: Map<string, StockInrQuote>
 ): DashboardData {
-  const fundSummaries = buildFundSummaries(funds, transactions);
+  const baseFundSummaries = buildFundSummaries(funds, transactions);
+  const fundSummaries = baseFundSummaries.map((summary) => {
+    if ((summary.assetType || "").toLowerCase() !== "stock") {
+      return summary;
+    }
+
+    const quote = stockQuotesByFundId?.get(summary.fundId);
+    if (!quote) {
+      return summary;
+    }
+
+    return {
+      ...summary,
+      stockPriceUsd: roundToTwo(quote.priceUsd),
+      stockFxInrPerUsd: roundToTwo(quote.fxInrPerUsd),
+      stockAsOf: quote.asOf,
+    };
+  });
 
   const mutualFundSummaries = fundSummaries.filter(
     (fund) => (fund.assetType || "").toLowerCase() === "mutual fund"
