@@ -43,6 +43,7 @@ export type FundSummary = {
   assetType: string;
   folioNumber: string;
   statementDate: string;
+  latestNavDate: string;
   currentUnits: number;
   latestNav: number;
   stockPriceUsd?: number;

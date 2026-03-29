@@ -869,6 +869,11 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
                       <span className="subtle-line">
                         1 share: {formatUsd(fund.stockPriceUsd)}
                       </span>
+                    ) : fund.assetType === "Mutual Fund" && fund.latestNav ? (
+                      <span className="subtle-line">
+                        NAV {formatNavInr(fund.latestNav)}
+                        {fund.latestNavDate ? ` · ${fund.latestNavDate}` : ""}
+                      </span>
                     ) : null}
                   </td>
                   <td
@@ -952,6 +957,15 @@ function formatUsd(value: number) {
     currency: "USD",
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
+  }).format(value);
+}
+
+function formatNavInr(value: number) {
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 4,
   }).format(value);
 }
 
