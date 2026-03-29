@@ -970,10 +970,19 @@ function formatNavInr(value: number) {
 }
 
 function formatUnitsValue(value: number) {
+  const truncated = truncateDecimals(value, 8);
   return new Intl.NumberFormat("en-IN", {
-    maximumFractionDigits: 4,
+    maximumFractionDigits: 8,
     minimumFractionDigits: 0,
-  }).format(value);
+  }).format(truncated);
+}
+
+function truncateDecimals(value: number, decimals: number) {
+  if (!Number.isFinite(value) || !Number.isFinite(decimals) || decimals <= 0) {
+    return value;
+  }
+  const factor = 10 ** Math.min(12, Math.floor(decimals));
+  return Math.trunc(value * factor) / factor;
 }
 
 function formatInrCompact(value: number) {

@@ -396,7 +396,7 @@ function buildTransactionRecord({
   const isMutualFund = (selectedFund.assetType || "").toLowerCase() === "mutual fund";
   const units =
     input.units ??
-    (isMutualFund && nav > 0 ? roundToFour(amountInvested / nav) : 0);
+    (isMutualFund && nav > 0 ? amountInvested / nav : 0);
 
   return {
     rowId,
@@ -856,7 +856,7 @@ function buildFundSummaries(
         folioNumber: fund.folioNumber,
         statementDate: fund.statementDate,
         latestNavDate: fund.latestNavDate,
-        currentUnits: roundToTwo(currentUnits),
+        currentUnits,
         latestNav: fund.latestNav,
         totalContributions: roundToTwo(totalContributions),
         totalRedemptions: roundToTwo(totalRedemptions),
@@ -1055,10 +1055,6 @@ function sumBy<T>(items: T[], getter: (item: T) => number) {
 
 function roundToTwo(value: number) {
   return Number(value.toFixed(2));
-}
-
-function roundToFour(value: number) {
-  return Number(value.toFixed(4));
 }
 
 function normalizeCashAmount(value: number) {

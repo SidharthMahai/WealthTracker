@@ -105,7 +105,11 @@ export function AddInvestmentForm({
     if (!Number.isFinite(amount) || !Number.isFinite(nav) || amount <= 0 || nav <= 0) {
       return "";
     }
-    return (amount / nav).toFixed(4);
+    const units = amount / nav;
+    if (!Number.isFinite(units) || units <= 0) {
+      return "";
+    }
+    return String(units);
   }
 
   return (
