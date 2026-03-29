@@ -37,6 +37,7 @@ export function TransactionHistoryTable({
   const [yearFilter, setYearFilter] = useState("all");
   const [monthFilter, setMonthFilter] = useState("all");
   const [directionFilter, setDirectionFilter] = useState("all");
+  const [entryTypeFilter, setEntryTypeFilter] = useState("all");
   const [editingRowId, setEditingRowId] = useState<string | null>(null);
   const [draft, setDraft] = useState<EditableTransaction | null>(null);
   const [busyRowId, setBusyRowId] = useState<string | null>(null);
@@ -104,8 +105,17 @@ export function TransactionHistoryTable({
         getMonthKey(transaction.transactionDate) === monthFilter;
       const sameDirection =
         directionFilter === "all" || transaction.direction === directionFilter;
+      const sameEntryType =
+        entryTypeFilter === "all" || transaction.transactionType === entryTypeFilter;
 
-      if (!sameType || !sameFund || !sameYear || !sameMonth || !sameDirection) {
+      if (
+        !sameType ||
+        !sameFund ||
+        !sameYear ||
+        !sameMonth ||
+        !sameDirection ||
+        !sameEntryType
+      ) {
         return false;
       }
 
@@ -132,6 +142,7 @@ export function TransactionHistoryTable({
     assetTypeByFundId,
     assetTypeFilter,
     directionFilter,
+    entryTypeFilter,
     fundFilter,
     monthFilter,
     search,
@@ -167,7 +178,7 @@ export function TransactionHistoryTable({
     setDraft({
       transactionDate: transaction.transactionDate,
       fundId: transaction.fundId,
-      transactionType: transaction.transactionType || "Manual Entry",
+      transactionType: transaction.transactionType || "Purchase",
       direction: transaction.direction,
       amountInvested: String(transaction.normalizedAmount || ""),
       units: transaction.units ? String(transaction.units) : "",
@@ -308,6 +319,7 @@ export function TransactionHistoryTable({
     setYearFilter("all");
     setMonthFilter("all");
     setDirectionFilter("all");
+    setEntryTypeFilter("all");
   }
 
   return (
@@ -403,6 +415,18 @@ export function TransactionHistoryTable({
             <option value="Redemption">Redemption</option>
           </select>
         </label>
+
+        <label>
+          <span>Entry Type</span>
+          <select
+            value={entryTypeFilter}
+            onChange={(event) => setEntryTypeFilter(event.target.value)}
+          >
+            <option value="all">All</option>
+            <option value="Purchase">Purchase</option>
+            <option value="SIP">SIP</option>
+          </select>
+        </label>
       </div>
 
       <div className="history-summary">
@@ -447,7 +471,7 @@ export function TransactionHistoryTable({
             </tr>
           </thead>
           <tbody
-            key={`${search}|${assetTypeFilter}|${fundFilter}|${yearFilter}|${monthFilter}|${directionFilter}`}
+            key={`${search}|${assetTypeFilter}|${fundFilter}|${yearFilter}|${monthFilter}|${directionFilter}|${entryTypeFilter}`}
           >
             {filteredTransactions.length === 0 ? (
               <tr>
