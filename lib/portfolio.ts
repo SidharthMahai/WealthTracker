@@ -107,6 +107,7 @@ export async function addTransaction(input: NewTransactionInput) {
     selectedFund,
     input: parsed,
   });
+  applyNavUpdateFromTransaction(selectedFund, newTransaction);
 
   const updatedTransactions = [...transactions, newTransaction];
   writePortfolioWorkbook(workbookPath, workbook, funds, updatedTransactions);
@@ -155,6 +156,7 @@ export async function updateTransaction(
     selectedFund,
     input: parsed,
   });
+  applyNavUpdateFromTransaction(selectedFund, updatedTransaction);
 
   const updatedTransactions = transactions.slice();
   updatedTransactions[transactionIndex] = updatedTransaction;
@@ -416,6 +418,40 @@ function buildTransactionRecord({
     notes: existingTransaction?.notes ?? "",
     sourceFile: existingTransaction?.sourceFile || "Next.js app",
   };
+}
+
+function applyNavUpdateFromTransaction(fund: FundRecord, transaction: TransactionRecord) {
+  const assetType = (fund.assetType || "").toLowerCase();
+  if (assetType !== "mutual fund") {
+    return;
+  }
+
+  const nav = transaction.nav ?? 0;
+  if (!Number.isFinite(nav) || nav <= 0) {
+    return;
+  }
+
+  const txDate = transaction.transactionDate;
+  if (!txDate) {
+    return;
+  }
+
+  if (shouldReplaceLatestNav(fund.latestNavDate, txDate)) {
+    fund.latestNav = roundToTwo(nav);
+    fund.latestNavDate = txDate;
+  }
+}
+
+function shouldReplaceLatestNav(currentDate: string, incomingDate: string) {
+  const current = String(currentDate || "").trim();
+  const incoming = String(incomingDate || "").trim();
+  if (!incoming) {
+    return false;
+  }
+  if (!current) {
+    return true;
+  }
+  return incoming.localeCompare(current) >= 0;
 }
 
 function getFundOrThrow(funds: FundRecord[], fundId: string) {
