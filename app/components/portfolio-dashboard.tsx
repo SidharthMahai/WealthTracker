@@ -836,7 +836,7 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
         </div>
 
         <div className="table-scroll">
-          <table>
+          <table className="holdings-table">
             <thead>
               <tr>
                 <th>Fund</th>
@@ -844,8 +844,8 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
                 <th>Type</th>
                 <th>Balance Units</th>
                 <th>Purchase Value</th>
-                <th>Current Value</th>
-                <th>Profit or Loss</th>
+                <th className="current-value-col">Current Value</th>
+                <th className="profit-col">Profit or Loss</th>
                 <th>Return</th>
                 <th>Update</th>
               </tr>
@@ -863,21 +863,21 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
                   <td className="numeric-cell">
                     {fund.assetType === "Stock" ? "—" : formatInrFull(fund.totalInvested)}
                   </td>
-                  <td className="numeric-cell">
+                  <td className="numeric-cell current-value-col">
                     {formatInrFull(fund.currentValue)}
                     {fund.assetType === "Stock" && fund.stockPriceUsd ? (
-                      <span className="subtle-line">
+                      <span className="subtle-line nav-meta">
                         1 share: {formatUsd(fund.stockPriceUsd)}
                       </span>
                     ) : fund.assetType === "Mutual Fund" && fund.latestNav ? (
-                      <span className="subtle-line">
+                      <span className="subtle-line nav-meta">
                         NAV {formatNavInr(fund.latestNav)}
-                        {fund.latestNavDate ? ` · ${fund.latestNavDate}` : ""}
+                        {fund.latestNavDate ? ` (${fund.latestNavDate})` : ""}
                       </span>
                     ) : null}
                   </td>
                   <td
-                    className={`numeric-cell ${
+                    className={`numeric-cell profit-col ${
                       fund.profitLoss >= 0 ? "text-positive" : "text-negative"
                     }`}
                   >

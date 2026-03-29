@@ -664,6 +664,19 @@ tfoot td {
   font-size: 0.82rem;
 }
 
+.holdings-table .current-value-col {
+  min-width: 220px;
+}
+
+.holdings-table .profit-col {
+  width: 150px;
+  max-width: 150px;
+}
+
+.nav-meta {
+  white-space: nowrap;
+}
+
 @media (max-width: 1180px) {
   .hero,
   .content-grid,
