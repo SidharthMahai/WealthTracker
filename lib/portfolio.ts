@@ -25,7 +25,7 @@ const transactionSchema = z.object({
   fundId: z.string().min(1),
   amountInvested: z.number().positive(),
   direction: z.enum(["Contribution", "Redemption"]).default("Contribution"),
-  transactionType: z.string().trim().min(1).default("Manual Entry"),
+  transactionType: z.string().trim().min(1).default("Purchase"),
   units: z.number().nonnegative().optional(),
   nav: z.number().nonnegative().optional(),
 });
@@ -390,6 +390,11 @@ function buildTransactionRecord({
 }): TransactionRecord {
   const amountInvested = roundToTwo(input.amountInvested);
   const normalizedAmount = normalizeCashAmount(amountInvested);
+  const nav = input.nav ?? 0;
+  const isMutualFund = (selectedFund.assetType || "").toLowerCase() === "mutual fund";
+  const units =
+    input.units ??
+    (isMutualFund && nav > 0 ? roundToFour(amountInvested / nav) : 0);
 
   return {
     rowId,
@@ -404,8 +409,8 @@ function buildTransactionRecord({
     cashAmountExact: amountInvested,
     statementAmount: amountInvested,
     charges: existingTransaction?.charges ?? 0,
-    units: input.units ?? 0,
-    nav: input.nav ?? 0,
+    units,
+    nav,
     balanceUnits: 0,
     folioNumber: selectedFund.folioNumber,
     notes: existingTransaction?.notes ?? "",
@@ -1012,6 +1017,10 @@ function sumBy<T>(items: T[], getter: (item: T) => number) {
 
 function roundToTwo(value: number) {
   return Number(value.toFixed(2));
+}
+
+function roundToFour(value: number) {
+  return Number(value.toFixed(4));
 }
 
 function normalizeCashAmount(value: number) {

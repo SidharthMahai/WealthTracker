@@ -18,6 +18,7 @@ export function AddInvestmentForm({
   const [form, setForm] = useState({
     transactionDate: today,
     fundId: funds[0]?.fundId ?? "",
+    transactionType: "Purchase",
     amountInvested: "",
     units: "",
     nav: "",
@@ -25,6 +26,13 @@ export function AddInvestmentForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+
+  const selectedFund = useMemo(
+    () => funds.find((fund) => fund.fundId === form.fundId) ?? null,
+    [funds, form.fundId]
+  );
+  const isMutualFund =
+    (selectedFund?.assetType || "").toLowerCase() === "mutual fund";
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -58,6 +66,7 @@ export function AddInvestmentForm({
 
       setForm((current) => ({
         ...current,
+        transactionType: "Purchase",
         amountInvested: "",
         units: "",
         nav: "",
@@ -90,6 +99,15 @@ export function AddInvestmentForm({
     setForm((current) => ({ ...current, [field]: value }));
   }
 
+  function computeUnits(amountRaw: string, navRaw: string) {
+    const amount = Number(amountRaw);
+    const nav = Number(navRaw);
+    if (!Number.isFinite(amount) || !Number.isFinite(nav) || amount <= 0 || nav <= 0) {
+      return "";
+    }
+    return (amount / nav).toFixed(4);
+  }
+
   return (
     <form className="panel form-panel" onSubmit={handleSubmit}>
       <div className="panel-heading">
@@ -118,7 +136,21 @@ export function AddInvestmentForm({
           <span>Fund</span>
           <select
             value={form.fundId}
-            onChange={(event) => updateField("fundId", event.target.value)}
+            onChange={(event) => {
+              const nextFundId = event.target.value;
+              const nextFund =
+                funds.find((fund) => fund.fundId === nextFundId) ?? null;
+              const nextIsMutualFund =
+                (nextFund?.assetType || "").toLowerCase() === "mutual fund";
+
+              setForm((current) => {
+                const next = { ...current, fundId: nextFundId };
+                if (nextIsMutualFund) {
+                  next.units = computeUnits(next.amountInvested, next.nav);
+                }
+                return next;
+              });
+            }}
             required
           >
             {funds.map((fund) => (
@@ -130,13 +162,34 @@ export function AddInvestmentForm({
         </label>
 
         <label>
+          <span>Investment Type</span>
+          <select
+            value={form.transactionType}
+            onChange={(event) => updateField("transactionType", event.target.value)}
+            required
+          >
+            <option value="Purchase">Purchase</option>
+            <option value="SIP">SIP</option>
+          </select>
+        </label>
+
+        <label>
           <span>Purchase Amount</span>
           <input
             type="number"
             min="0"
             step="0.01"
             value={form.amountInvested}
-            onChange={(event) => updateField("amountInvested", event.target.value)}
+            onChange={(event) => {
+              const nextAmount = event.target.value;
+              setForm((current) => {
+                const next = { ...current, amountInvested: nextAmount };
+                if (isMutualFund) {
+                  next.units = computeUnits(nextAmount, next.nav);
+                }
+                return next;
+              });
+            }}
             placeholder="5000"
             required
           />
@@ -150,7 +203,8 @@ export function AddInvestmentForm({
             step="0.0001"
             value={form.units}
             onChange={(event) => updateField("units", event.target.value)}
-            placeholder="Optional"
+            placeholder={isMutualFund ? "Auto-calculated" : "Optional"}
+            disabled={isMutualFund}
           />
         </label>
 
@@ -161,8 +215,18 @@ export function AddInvestmentForm({
             min="0"
             step="0.0001"
             value={form.nav}
-            onChange={(event) => updateField("nav", event.target.value)}
+            onChange={(event) => {
+              const nextNav = event.target.value;
+              setForm((current) => {
+                const next = { ...current, nav: nextNav };
+                if (isMutualFund) {
+                  next.units = computeUnits(next.amountInvested, nextNav);
+                }
+                return next;
+              });
+            }}
             placeholder="Optional"
+            required={isMutualFund}
           />
         </label>
       </div>
@@ -171,7 +235,7 @@ export function AddInvestmentForm({
         {error ? <p className="error-text">{error}</p> : null}
         {!error && notice ? <p className="muted">{notice}</p> : null}
         <button type="submit" disabled={isSubmitting || !funds.length}>
-          Save new entry
+          Save entry
         </button>
       </div>
     </form>

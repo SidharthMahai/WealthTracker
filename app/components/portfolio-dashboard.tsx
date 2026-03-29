@@ -842,6 +842,7 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
                 <th>Fund</th>
                 <th>Category</th>
                 <th>Type</th>
+                <th>Balance Units</th>
                 <th>Purchase Value</th>
                 <th>Current Value</th>
                 <th>Profit or Loss</th>
@@ -858,6 +859,7 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
                   </td>
                   <td>{fund.category}</td>
                   <td>{fund.assetType || "—"}</td>
+                  <td className="numeric-cell">{formatUnitsValue(fund.currentUnits)}</td>
                   <td className="numeric-cell">
                     {fund.assetType === "Stock" ? "—" : formatInrFull(fund.totalInvested)}
                   </td>
@@ -950,6 +952,13 @@ function formatUsd(value: number) {
     currency: "USD",
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
+  }).format(value);
+}
+
+function formatUnitsValue(value: number) {
+  return new Intl.NumberFormat("en-IN", {
+    maximumFractionDigits: 4,
+    minimumFractionDigits: 0,
   }).format(value);
 }
 
