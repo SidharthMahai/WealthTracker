@@ -110,7 +110,8 @@ export async function addTransaction(input: NewTransactionInput) {
   applyNavUpdateFromTransaction(selectedFund, newTransaction);
 
   const updatedTransactions = [...transactions, newTransaction];
-  writePortfolioWorkbook(workbookPath, workbook, funds, updatedTransactions);
+  const balancedTransactions = computeBalanceUnits(updatedTransactions);
+  writePortfolioWorkbook(workbookPath, workbook, funds, balancedTransactions);
   await persistWorkbookIfBlob(workbookContext);
 
   const { funds: hydratedFunds, stockQuotesByFundId } =
@@ -121,7 +122,7 @@ export async function addTransaction(input: NewTransactionInput) {
     dashboard: buildDashboardSnapshot(
       workbookContext,
       hydratedFunds,
-      updatedTransactions,
+      balancedTransactions,
       stockQuotesByFundId
     ),
   };
@@ -160,8 +161,9 @@ export async function updateTransaction(
 
   const updatedTransactions = transactions.slice();
   updatedTransactions[transactionIndex] = updatedTransaction;
+  const balancedTransactions = computeBalanceUnits(updatedTransactions);
 
-  writePortfolioWorkbook(workbookPath, workbook, funds, updatedTransactions);
+  writePortfolioWorkbook(workbookPath, workbook, funds, balancedTransactions);
   await persistWorkbookIfBlob(workbookContext);
   const { funds: hydratedFunds, stockQuotesByFundId } =
     await hydrateFundsWithLiveMarketData(funds);
@@ -171,7 +173,7 @@ export async function updateTransaction(
     dashboard: buildDashboardSnapshot(
       workbookContext,
       hydratedFunds,
-      updatedTransactions,
+      balancedTransactions,
       stockQuotesByFundId
     ),
   };
@@ -193,7 +195,8 @@ export async function deleteTransaction(rowId: string) {
     throw new Error("Transaction not found.");
   }
 
-  writePortfolioWorkbook(workbookPath, workbook, funds, updatedTransactions);
+  const balancedTransactions = computeBalanceUnits(updatedTransactions);
+  writePortfolioWorkbook(workbookPath, workbook, funds, balancedTransactions);
   await persistWorkbookIfBlob(workbookContext);
   const { funds: hydratedFunds, stockQuotesByFundId } =
     await hydrateFundsWithLiveMarketData(funds);
@@ -202,7 +205,7 @@ export async function deleteTransaction(rowId: string) {
     dashboard: buildDashboardSnapshot(
       workbookContext,
       hydratedFunds,
-      updatedTransactions,
+      balancedTransactions,
       stockQuotesByFundId
     ),
   };
@@ -507,8 +510,9 @@ function writePortfolioWorkbook(
   const orderedTransactions = transactions
     .slice()
     .sort((left, right) => sortTransactionsAscending(left, right));
-  const fundSummaries = buildFundSummaries(funds, orderedTransactions);
-  const yearlySummary = buildYearlyChart(orderedTransactions);
+  const balancedTransactions = computeBalanceUnits(orderedTransactions);
+  const fundSummaries = buildFundSummaries(funds, balancedTransactions);
+  const yearlySummary = buildYearlyChart(balancedTransactions);
 
   workbook.Sheets["Transactions"] = XLSX.utils.aoa_to_sheet([
     [
@@ -531,7 +535,7 @@ function writePortfolioWorkbook(
       "Notes",
       "Source File",
     ],
-    ...orderedTransactions.map((transaction) => [
+    ...balancedTransactions.map((transaction) => [
       transaction.rowId,
       transaction.entryId,
       transaction.transactionDate,
@@ -552,6 +556,7 @@ function writePortfolioWorkbook(
       transaction.sourceFile,
     ]),
   ]);
+  applyBalanceUnitsNumberFormat(workbook.Sheets["Transactions"], balancedTransactions.length);
   workbook.Sheets["Transactions"]["!cols"] = [
     { wch: 12, hidden: true },
     { wch: 12 },
@@ -774,7 +779,7 @@ function parseTransactions(workbook: XLSX.WorkBook): TransactionRecord[] {
       charges: toNumber(row["Charges"]),
       units: toNumber(row["Units"]),
       nav: toNumber(row["NAV"]),
-      balanceUnits: toNumber(row["Balance Units"]),
+      balanceUnits: roundToFour(toNumber(row["Balance Units"])),
       folioNumber: String(row["Folio Number"] || ""),
       notes: String(row["Notes"] || ""),
       sourceFile: String(row["Source File"] || ""),
@@ -831,7 +836,7 @@ function buildFundSummaries(
 
       for (const transaction of fundTransactions) {
         if (transaction.direction === "Contribution") {
-          currentUnits += transaction.units;
+          currentUnits = roundToFour(currentUnits + transaction.units);
           costBasis += transaction.normalizedAmount;
           totalContributions += transaction.normalizedAmount;
           continue;
@@ -840,7 +845,7 @@ function buildFundSummaries(
         const averageCostPerUnit = currentUnits > 0 ? costBasis / currentUnits : 0;
         const redeemedUnits = Math.min(transaction.units, currentUnits);
         costBasis = Math.max(0, costBasis - redeemedUnits * averageCostPerUnit);
-        currentUnits = Math.max(0, currentUnits - transaction.units);
+        currentUnits = roundToFour(Math.max(0, currentUnits - transaction.units));
         totalRedemptions += transaction.normalizedAmount;
       }
 
@@ -856,7 +861,7 @@ function buildFundSummaries(
         folioNumber: fund.folioNumber,
         statementDate: fund.statementDate,
         latestNavDate: fund.latestNavDate,
-        currentUnits,
+        currentUnits: roundToFour(currentUnits),
         latestNav: fund.latestNav,
         totalContributions: roundToTwo(totalContributions),
         totalRedemptions: roundToTwo(totalRedemptions),
@@ -950,9 +955,8 @@ function buildPortfolioFlowChart(
 
     if (transaction.direction === "Contribution") {
       position.costBasis += transaction.normalizedAmount;
-      position.units += transaction.units;
+      position.units = roundToFour(position.units + transaction.units);
       portfolioPurchaseValue += transaction.normalizedAmount;
-      portfolioCurrentValue += transaction.units * latestNav;
     } else {
       const averageCostPerUnit =
         position.units > 0 ? position.costBasis / position.units : 0;
@@ -960,15 +964,16 @@ function buildPortfolioFlowChart(
       const costReduction = redeemedUnits * averageCostPerUnit;
 
       position.costBasis = Math.max(0, position.costBasis - costReduction);
-      position.units = Math.max(0, position.units - transaction.units);
+      position.units = roundToFour(Math.max(0, position.units - transaction.units));
       portfolioPurchaseValue = Math.max(0, portfolioPurchaseValue - costReduction);
-      portfolioCurrentValue = Math.max(
-        0,
-        portfolioCurrentValue - transaction.units * latestNav
-      );
     }
 
     positions.set(transaction.fundId, position);
+    portfolioCurrentValue = 0;
+    for (const [fundId, currentPosition] of positions.entries()) {
+      const nav = latestNavByFund.get(fundId) ?? 0;
+      portfolioCurrentValue += currentPosition.units * nav;
+    }
     const period = transaction.transactionDate.slice(0, 7);
     const purchaseValue = roundToTwo(portfolioPurchaseValue);
     const currentValue = roundToTwo(portfolioCurrentValue);
@@ -1055,6 +1060,47 @@ function sumBy<T>(items: T[], getter: (item: T) => number) {
 
 function roundToTwo(value: number) {
   return Number(value.toFixed(2));
+}
+
+function roundToFour(value: number) {
+  return Number(value.toFixed(4));
+}
+
+function computeBalanceUnits(transactions: TransactionRecord[]) {
+  const ordered = transactions
+    .slice()
+    .sort((left, right) => sortTransactionsAscending(left, right));
+  const balances = new Map<string, number>();
+
+  return ordered.map((transaction) => {
+    const previous = balances.get(transaction.fundId) ?? 0;
+    const units = Number.isFinite(transaction.units) ? transaction.units : 0;
+    const nextRaw =
+      transaction.direction === "Redemption" ? previous - units : previous + units;
+    const next = roundToFour(Math.max(0, nextRaw));
+    balances.set(transaction.fundId, next);
+    return { ...transaction, balanceUnits: next };
+  });
+}
+
+function applyBalanceUnitsNumberFormat(
+  sheet: XLSX.WorkSheet | undefined,
+  rowCount: number
+) {
+  if (!sheet || rowCount <= 0) {
+    return;
+  }
+
+  // Balance Units is the 15th column (0-based index 14) in the AOA above.
+  const balanceUnitsColumnIndex = 14;
+  for (let index = 0; index < rowCount; index += 1) {
+    const address = XLSX.utils.encode_cell({ r: index + 1, c: balanceUnitsColumnIndex });
+    const cell = sheet[address] as XLSX.CellObject | undefined;
+    if (!cell || cell.t !== "n") {
+      continue;
+    }
+    cell.z = "0.0000";
+  }
 }
 
 function normalizeCashAmount(value: number) {
