@@ -49,10 +49,15 @@ async function downloadWorkbookBlobToTemp(
   }
 
   for (const candidateAccess of accessOrder) {
-    const result = await get(pathname, {
-      access: candidateAccess,
-      useCache: false,
-    });
+    let result = null;
+    try {
+      result = await get(pathname, {
+        access: candidateAccess,
+        ...(candidateAccess === "private" ? { useCache: false } : {}),
+      });
+    } catch {
+      continue;
+    }
     if (!result || result.statusCode !== 200 || !result.stream) {
       continue;
     }
