@@ -19,6 +19,7 @@ export function AddInvestmentForm({
     transactionDate: today,
     fundId: funds[0]?.fundId ?? "",
     transactionType: "Purchase",
+    direction: "Contribution" as "Contribution" | "Redemption",
     amountInvested: "",
     units: "",
     nav: "",
@@ -31,8 +32,21 @@ export function AddInvestmentForm({
     () => funds.find((fund) => fund.fundId === form.fundId) ?? null,
     [funds, form.fundId]
   );
-  const isMutualFund =
-    (selectedFund?.assetType || "").toLowerCase() === "mutual fund";
+  const selectedAssetType = (selectedFund?.assetType || "").toLowerCase();
+  const isMutualFund = selectedAssetType === "mutual fund";
+  const isGovtScheme = selectedAssetType === "govt scheme";
+  const isInterestCredited = form.transactionType === "Interest Credited";
+  const entryTypeOptions = useMemo(() => {
+    const options = [{ label: "Lumpsum", value: "Purchase" }];
+    if (isMutualFund) {
+      options.push({ label: "SIP", value: "SIP" });
+    }
+    if (isGovtScheme) {
+      options.push({ label: "Interest Credited", value: "Interest Credited" });
+    }
+    options.push({ label: "Redemption", value: "Redemption" });
+    return options;
+  }, [isGovtScheme, isMutualFund]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -67,6 +81,7 @@ export function AddInvestmentForm({
       setForm((current) => ({
         ...current,
         transactionType: "Purchase",
+        direction: "Contribution",
         amountInvested: "",
         units: "",
         nav: "",
@@ -119,9 +134,9 @@ export function AddInvestmentForm({
           <h2>Add a new entry</h2>
         </div>
         <p className="muted">
-          Add one row for every new contribution I make. The app writes directly
-          into the <code>Transactions</code> sheet and keeps the purchase amount
-          rounded the way you asked.
+          Add contributions, credited interest, or redemptions. The app writes
+          directly into the <code>Transactions</code> sheet and keeps purchase
+          value separate from interest credits.
         </p>
       </div>
 
@@ -146,9 +161,17 @@ export function AddInvestmentForm({
                 funds.find((fund) => fund.fundId === nextFundId) ?? null;
               const nextIsMutualFund =
                 (nextFund?.assetType || "").toLowerCase() === "mutual fund";
+              const nextIsGovtScheme =
+                (nextFund?.assetType || "").toLowerCase() === "govt scheme";
 
               setForm((current) => {
                 const next = { ...current, fundId: nextFundId };
+                if (!nextIsMutualFund && next.transactionType === "SIP") {
+                  next.transactionType = "Purchase";
+                }
+                if (!nextIsGovtScheme && next.transactionType === "Interest Credited") {
+                  next.transactionType = "Purchase";
+                }
                 if (nextIsMutualFund) {
                   next.units = computeUnits(next.amountInvested, next.nav);
                 }
@@ -169,16 +192,33 @@ export function AddInvestmentForm({
           <span>Investment Type</span>
           <select
             value={form.transactionType}
-            onChange={(event) => updateField("transactionType", event.target.value)}
+            onChange={(event) => {
+              const nextType = event.target.value;
+              setForm((current) => ({
+                ...current,
+                transactionType: nextType,
+                direction:
+                  nextType === "Redemption" ? "Redemption" : "Contribution",
+              }));
+            }}
             required
           >
-            <option value="Purchase">Purchase</option>
-            <option value="SIP">SIP</option>
+            {entryTypeOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
           </select>
         </label>
 
         <label>
-          <span>Purchase Amount</span>
+          <span>
+            {form.direction === "Redemption"
+              ? "Redemption Amount"
+              : isInterestCredited
+                ? "Credited Amount"
+                : "Purchase Amount"}
+          </span>
           <input
             type="number"
             min="0"
@@ -188,7 +228,7 @@ export function AddInvestmentForm({
               const nextAmount = event.target.value;
               setForm((current) => {
                 const next = { ...current, amountInvested: nextAmount };
-                if (isMutualFund) {
+                if (isMutualFund || isGovtScheme) {
                   next.units = computeUnits(nextAmount, next.nav);
                 }
                 return next;
@@ -223,7 +263,7 @@ export function AddInvestmentForm({
               const nextNav = event.target.value;
               setForm((current) => {
                 const next = { ...current, nav: nextNav };
-                if (isMutualFund) {
+                if (isMutualFund || isGovtScheme) {
                   next.units = computeUnits(next.amountInvested, nextNav);
                 }
                 return next;

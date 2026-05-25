@@ -25,7 +25,12 @@ const transactionSchema = z.object({
   fundId: z.string().min(1),
   amountInvested: z.number().positive(),
   direction: z.enum(["Contribution", "Redemption"]).default("Contribution"),
-  transactionType: z.string().trim().min(1).default("Purchase"),
+  transactionType: z
+    .string()
+    .trim()
+    .min(1)
+    .transform(normalizeTransactionType)
+    .default("Purchase"),
   units: z.number().nonnegative().optional(),
   nav: z.number().nonnegative().optional(),
 });
@@ -315,6 +320,7 @@ function buildDashboardSnapshot(
       stockAsOf: quote.asOf,
     };
   });
+  const activeFundSummaries = fundSummaries.filter(hasOpenPosition);
 
   const mutualFundSummaries = fundSummaries.filter(
     (fund) => (fund.assetType || "").toLowerCase() === "mutual fund"
@@ -362,7 +368,7 @@ function buildDashboardSnapshot(
       assetType: fund.assetType,
     })),
     fundSummaries,
-    fundChart: fundSummaries
+    fundChart: activeFundSummaries
       .filter((fund) => (fund.assetType || "").toLowerCase() !== "stock")
       .map((fund) => ({
       fundId: fund.fundId,
@@ -372,7 +378,7 @@ function buildDashboardSnapshot(
     })),
     portfolioFlowChart: buildPortfolioFlowChart(transactions, funds),
     yearlyChart: buildYearlyChart(transactions),
-    categoryChart: buildCategoryChart(fundSummaries),
+    categoryChart: buildCategoryChart(activeFundSummaries),
     transactions: transactions
       .slice()
       .sort((left, right) => sortTransactionsDescending(left, right)),
@@ -394,12 +400,16 @@ function buildTransactionRecord({
   input: TransactionInput;
 }): TransactionRecord {
   const amountInvested = roundToTwo(input.amountInvested);
-  const normalizedAmount = normalizeCashAmount(amountInvested);
-  const nav = input.nav ?? 0;
+  const isInterestCredited = isInterestCreditedTransaction(input.transactionType);
+  const normalizedAmount = isInterestCredited
+    ? 0
+    : normalizeCashAmount(amountInvested);
+  const nav = input.nav ?? selectedFund.latestNav ?? 0;
   const isMutualFund = (selectedFund.assetType || "").toLowerCase() === "mutual fund";
+  const isGovtScheme = (selectedFund.assetType || "").toLowerCase() === "govt scheme";
   const units =
     input.units ??
-    (isMutualFund && nav > 0 ? amountInvested / nav : 0);
+    ((isMutualFund || isGovtScheme) && nav > 0 ? amountInvested / nav : 0);
 
   return {
     rowId,
@@ -421,6 +431,18 @@ function buildTransactionRecord({
     notes: existingTransaction?.notes ?? "",
     sourceFile: existingTransaction?.sourceFile || "Next.js app",
   };
+}
+
+function normalizeTransactionType(transactionType: string) {
+  const normalized = transactionType.trim();
+  if (/^interest\s+credit(?:ed)?$/i.test(normalized)) {
+    return "Interest Credited";
+  }
+  return normalized;
+}
+
+function isInterestCreditedTransaction(transactionType: string) {
+  return normalizeTransactionType(transactionType) === "Interest Credited";
 }
 
 function applyNavUpdateFromTransaction(fund: FundRecord, transaction: TransactionRecord) {
@@ -768,7 +790,7 @@ function parseTransactions(workbook: XLSX.WorkBook): TransactionRecord[] {
       financialYear: String(row["Financial Year"] || ""),
       fundId: String(row["Fund ID"] || ""),
       fundName: String(row["Fund Name"] || ""),
-      transactionType: String(row["Transaction Type"] || ""),
+      transactionType: normalizeTransactionType(String(row["Transaction Type"] || "")),
       direction:
         String(row["Direction"] || "") === "Redemption"
           ? "Redemption"
@@ -1014,6 +1036,14 @@ function buildCategoryChart(fundSummaries: FundSummary[]) {
     category,
     currentValue: roundToTwo(currentValue),
   }));
+}
+
+function hasOpenPosition(fund: FundSummary) {
+  return (
+    Math.abs(fund.currentUnits) > 0.0001 ||
+    Math.abs(fund.currentValue) > 0.005 ||
+    Math.abs(fund.totalInvested) > 0.005
+  );
 }
 
 function getFinancialYear(dateString: string) {

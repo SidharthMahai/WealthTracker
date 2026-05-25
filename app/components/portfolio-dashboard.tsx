@@ -124,6 +124,11 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
     [currentDashboard.fundChart.length]
   );
 
+  const activeFundSummaries = useMemo(
+    () => currentDashboard.fundSummaries.filter(hasOpenPosition),
+    [currentDashboard.fundSummaries]
+  );
+
   const workbookConfigured =
     currentDashboard.workbookName !== "No workbook configured";
 
@@ -851,7 +856,7 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
               </tr>
             </thead>
             <tbody>
-              {currentDashboard.fundSummaries.map((fund) => (
+              {activeFundSummaries.map((fund) => (
                 <tr key={fund.fundId}>
                   <td>
                     <strong>{fund.name}</strong>
@@ -975,6 +980,14 @@ function formatUnitsValue(value: number) {
     maximumFractionDigits: 8,
     minimumFractionDigits: 0,
   }).format(truncated);
+}
+
+function hasOpenPosition(fund: DashboardData["fundSummaries"][number]) {
+  return (
+    Math.abs(fund.currentUnits) > 0.0001 ||
+    Math.abs(fund.currentValue) > 0.005 ||
+    Math.abs(fund.totalInvested) > 0.005
+  );
 }
 
 function truncateDecimals(value: number, decimals: number) {

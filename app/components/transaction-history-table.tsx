@@ -90,6 +90,18 @@ export function TransactionHistoryTable({
     return Array.from(monthKeys).sort((left, right) => right.localeCompare(left));
   }, [transactions]);
 
+  const entryTypeOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          transactions
+            .map((transaction) => transaction.transactionType.trim())
+            .filter(Boolean)
+        )
+      ).sort((left, right) => left.localeCompare(right)),
+    [transactions]
+  );
+
   const filteredTransactions = useMemo(() => {
     const normalizedSearch = normalizeValue(search);
 
@@ -423,8 +435,11 @@ export function TransactionHistoryTable({
             onChange={(event) => setEntryTypeFilter(event.target.value)}
           >
             <option value="all">All</option>
-            <option value="Purchase">Purchase</option>
-            <option value="SIP">SIP</option>
+            {entryTypeOptions.map((entryType) => (
+              <option key={entryType} value={entryType}>
+                {entryType}
+              </option>
+            ))}
           </select>
         </label>
       </div>
@@ -518,13 +533,20 @@ export function TransactionHistoryTable({
                       </select>
                     </td>
                     <td>
-                      <input
-                        type="text"
+                      <select
                         value={draft.transactionType}
                         onChange={(event) =>
                           updateDraft("transactionType", event.target.value)
                         }
-                      />
+                      >
+                        {getEditableEntryTypeOptions(entryTypeOptions, draft).map(
+                          (entryType) => (
+                            <option key={entryType} value={entryType}>
+                              {entryType}
+                            </option>
+                          )
+                        )}
+                      </select>
                     </td>
                     <td>
                       <select
@@ -700,6 +722,16 @@ function formatNav(value: number) {
     maximumFractionDigits: 4,
     minimumFractionDigits: 0,
   }).format(value);
+}
+
+function getEditableEntryTypeOptions(
+  entryTypeOptions: string[],
+  draft: EditableTransaction
+) {
+  const defaults = ["Purchase", "SIP", "Interest Credited", "Redemption"];
+  return Array.from(new Set([...entryTypeOptions, ...defaults, draft.transactionType]))
+    .filter(Boolean)
+    .sort((left, right) => left.localeCompare(right));
 }
 
 function normalizeValue(value: string) {
