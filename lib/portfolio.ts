@@ -33,6 +33,7 @@ const transactionSchema = z.object({
     .default("Purchase"),
   units: z.number().nonnegative().optional(),
   nav: z.number().nonnegative().optional(),
+  currentNav: z.number().nonnegative().optional(),
 });
 
 type TransactionInput = z.infer<typeof transactionSchema>;
@@ -112,7 +113,7 @@ export async function addTransaction(input: NewTransactionInput) {
     selectedFund,
     input: parsed,
   });
-  applyNavUpdateFromTransaction(selectedFund, newTransaction);
+  applyNavUpdateFromTransaction(selectedFund, newTransaction, parsed);
 
   const updatedTransactions = [...transactions, newTransaction];
   const balancedTransactions = computeBalanceUnits(updatedTransactions);
@@ -162,7 +163,7 @@ export async function updateTransaction(
     selectedFund,
     input: parsed,
   });
-  applyNavUpdateFromTransaction(selectedFund, updatedTransaction);
+  applyNavUpdateFromTransaction(selectedFund, updatedTransaction, parsed);
 
   const updatedTransactions = transactions.slice();
   updatedTransactions[transactionIndex] = updatedTransaction;
@@ -445,9 +446,20 @@ function isInterestCreditedTransaction(transactionType: string) {
   return normalizeTransactionType(transactionType) === "Interest Credited";
 }
 
-function applyNavUpdateFromTransaction(fund: FundRecord, transaction: TransactionRecord) {
+function applyNavUpdateFromTransaction(
+  fund: FundRecord,
+  transaction: TransactionRecord,
+  input?: Pick<TransactionInput, "currentNav">
+) {
   const assetType = (fund.assetType || "").toLowerCase();
   if (assetType !== "mutual fund") {
+    return;
+  }
+
+  const currentNav = input?.currentNav ?? 0;
+  if (Number.isFinite(currentNav) && currentNav > 0) {
+    fund.latestNav = roundToTwo(currentNav);
+    fund.latestNavDate = new Date().toISOString().slice(0, 10);
     return;
   }
 

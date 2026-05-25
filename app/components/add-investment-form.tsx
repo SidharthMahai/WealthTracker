@@ -23,6 +23,7 @@ export function AddInvestmentForm({
     amountInvested: "",
     units: "",
     nav: "",
+    currentNav: "",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -66,6 +67,7 @@ export function AddInvestmentForm({
           amountInvested: Number(form.amountInvested),
           units: form.units ? Number(form.units) : undefined,
           nav: form.nav ? Number(form.nav) : undefined,
+          currentNav: form.currentNav ? Number(form.currentNav) : undefined,
         }),
       });
 
@@ -85,6 +87,7 @@ export function AddInvestmentForm({
         amountInvested: "",
         units: "",
         nav: "",
+        currentNav: "",
       }));
       if (payload.dashboard) {
         onDashboardUpdated?.(payload.dashboard);
@@ -136,7 +139,8 @@ export function AddInvestmentForm({
         <p className="muted">
           Add contributions, credited interest, or redemptions. The app writes
           directly into the <code>Transactions</code> sheet and keeps purchase
-          value separate from interest credits.
+          value separate from interest credits. For mutual funds, you can save
+          both the historical transaction NAV and today&apos;s current NAV.
         </p>
       </div>
 
@@ -253,7 +257,7 @@ export function AddInvestmentForm({
         </label>
 
         <label>
-          <span>NAV</span>
+          <span>{isMutualFund ? "Transaction NAV" : "NAV"}</span>
           <input
             type="number"
             min="0"
@@ -273,6 +277,20 @@ export function AddInvestmentForm({
             required={isMutualFund}
           />
         </label>
+
+        {isMutualFund ? (
+          <label>
+            <span>Current NAV</span>
+            <input
+              type="number"
+              min="0"
+              step="0.0001"
+              value={form.currentNav}
+              onChange={(event) => updateField("currentNav", event.target.value)}
+              placeholder="Optional"
+            />
+          </label>
+        ) : null}
       </div>
 
       <div className="form-footer">

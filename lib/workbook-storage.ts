@@ -5,6 +5,7 @@ import crypto from "node:crypto";
 import { get, put } from "@vercel/blob";
 
 type WorkbookAccess = "private" | "public";
+let resolvedBlobAccess: WorkbookAccess | null = null;
 
 export type WorkbookContext = {
   localPath: string;
@@ -35,24 +36,41 @@ async function downloadWorkbookBlobToTemp(
   pathname: string,
   access: WorkbookAccess
 ): Promise<string | null> {
-  let result = await get(pathname, { access });
-  if ((!result || result.statusCode !== 200 || !result.stream) && access === "private") {
-    result = await get(pathname, { access: "public" });
+  const accessOrder =
+    resolvedBlobAccess && resolvedBlobAccess !== access
+      ? [resolvedBlobAccess, access]
+      : [access];
+
+  if (!accessOrder.includes("private")) {
+    accessOrder.push("private");
   }
-  if (!result || result.statusCode !== 200 || !result.stream) {
-    return null;
+  if (!accessOrder.includes("public")) {
+    accessOrder.push("public");
   }
 
-  const arrayBuffer = await new Response(result.stream).arrayBuffer();
-  const buffer = Buffer.from(arrayBuffer);
+  for (const candidateAccess of accessOrder) {
+    const result = await get(pathname, {
+      access: candidateAccess,
+      useCache: false,
+    });
+    if (!result || result.statusCode !== 200 || !result.stream) {
+      continue;
+    }
 
-  const safeName = path.basename(pathname || "Investment-Tracker.xlsx");
-  const base = safeName.replace(/\.xlsx$/i, "") || "Investment-Tracker";
-  const tmpName = `${base}-${crypto.randomUUID()}.xlsx`;
-  const tmpPath = path.join(os.tmpdir(), tmpName);
+    resolvedBlobAccess = candidateAccess;
+    const arrayBuffer = await new Response(result.stream).arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
 
-  fs.writeFileSync(tmpPath, buffer);
-  return tmpPath;
+    const safeName = path.basename(pathname || "Investment-Tracker.xlsx");
+    const base = safeName.replace(/\.xlsx$/i, "") || "Investment-Tracker";
+    const tmpName = `${base}-${crypto.randomUUID()}.xlsx`;
+    const tmpPath = path.join(os.tmpdir(), tmpName);
+
+    fs.writeFileSync(tmpPath, buffer);
+    return tmpPath;
+  }
+
+  return null;
 }
 
 export async function getWorkbookContextIfExists(
@@ -121,6 +139,7 @@ export async function persistWorkbookIfBlob(context: WorkbookContext) {
         cacheControlMaxAge: 0,
       }
     );
+    resolvedBlobAccess = context.blobAccess;
   } catch (error) {
     if (context.blobAccess !== "public") {
       await put(
@@ -134,6 +153,7 @@ export async function persistWorkbookIfBlob(context: WorkbookContext) {
           cacheControlMaxAge: 0,
         }
       );
+      resolvedBlobAccess = "public";
       return;
     }
 

@@ -3,6 +3,9 @@ import path from "node:path";
 import { getWorkbookContextIfExists } from "@/lib/workbook-storage";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+export const fetchCache = "force-no-store";
 
 const DEFAULT_WORKBOOK_PATH = path.join(
   process.cwd(),
@@ -25,6 +28,7 @@ export async function GET() {
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       // Note: browsers still usually download .xlsx; the workbook viewer at /workbook is the “open in browser” experience.
       "Content-Disposition": `inline; filename="${workbookContext.workbookName}"`,
+      "Cache-Control": "no-store",
     },
   });
 }

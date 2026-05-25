@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { startTransition, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Area,
   AreaChart,
@@ -38,6 +39,7 @@ const allocationColors = [
 const RADIAN = Math.PI / 180;
 
 export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
+  const router = useRouter();
   const [currentDashboard, setCurrentDashboard] = useState(dashboard);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState("");
@@ -98,14 +100,9 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
       const payload = await fetchDashboardSnapshot();
       setCurrentDashboard(payload);
       setLastUpdatedAt(Date.now());
-
-      await new Promise<void>((resolve) => {
-        window.setTimeout(() => resolve(), 180);
+      startTransition(() => {
+        router.refresh();
       });
-
-      const secondPayload = await fetchDashboardSnapshot();
-      setCurrentDashboard(secondPayload);
-      setLastUpdatedAt(Date.now());
       return true;
     } catch (error) {
       setRefreshError(
@@ -184,6 +181,9 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
   function applyDashboardUpdate(next: DashboardData) {
     setCurrentDashboard(next);
     setLastUpdatedAt(Date.now());
+    startTransition(() => {
+      router.refresh();
+    });
   }
 
   async function updateLatestNavForFund(fund: {

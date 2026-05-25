@@ -3,6 +3,7 @@ import { updateFundLatestNav } from "@/lib/portfolio";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
 
 export async function PATCH(request: Request) {
   try {
@@ -32,4 +33,3 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }
-

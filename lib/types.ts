@@ -117,4 +117,5 @@ export type NewTransactionInput = {
   transactionType?: string;
   units?: number;
   nav?: number;
+  currentNav?: number;
 };
