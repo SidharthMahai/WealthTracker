@@ -1044,7 +1044,9 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
                   </td>
                   <td>{fund.category}</td>
                   <td>{fund.assetType || "—"}</td>
-                  <td className="numeric-cell">{formatUnitsValue(fund.currentUnits)}</td>
+                  <td className="numeric-cell">
+                    {formatUnitsValue(fund.currentUnits, fund.assetType)}
+                  </td>
                   <td className="numeric-cell">
                     {fund.assetType === "Stock" ? "—" : formatInrFull(fund.totalInvested)}
                   </td>
@@ -1154,10 +1156,11 @@ function formatNavInr(value: number) {
   }).format(value);
 }
 
-function formatUnitsValue(value: number) {
-  const truncated = truncateDecimals(value, 8);
+function formatUnitsValue(value: number, assetType = "") {
+  const decimals = assetType === "Mutual Fund" ? 3 : 4;
+  const truncated = truncateDecimals(value, decimals);
   return new Intl.NumberFormat("en-IN", {
-    maximumFractionDigits: 8,
+    maximumFractionDigits: decimals,
     minimumFractionDigits: 0,
   }).format(truncated);
 }

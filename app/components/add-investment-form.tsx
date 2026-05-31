@@ -127,7 +127,7 @@ export function AddInvestmentForm({
     if (!Number.isFinite(units) || units <= 0) {
       return "";
     }
-    return String(units);
+    return String(roundUnitsForDisplay(units, isMutualFund ? 3 : 4));
   }
 
   return (
@@ -248,7 +248,7 @@ export function AddInvestmentForm({
           <input
             type="number"
             min="0"
-            step="0.0001"
+            step={isMutualFund ? "0.001" : "0.0001"}
             value={form.units}
             onChange={(event) => updateField("units", event.target.value)}
             placeholder={isMutualFund ? "Auto-calculated" : "Optional"}
@@ -302,4 +302,8 @@ export function AddInvestmentForm({
       </div>
     </form>
   );
+}
+
+function roundUnitsForDisplay(value: number, decimals: number) {
+  return Number(value.toFixed(decimals));
 }

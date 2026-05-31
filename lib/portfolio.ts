@@ -126,7 +126,10 @@ export async function addTransaction(input: NewTransactionInput) {
   applyNavUpdateFromTransaction(selectedFund, newTransaction, parsed);
 
   const updatedTransactions = [...transactions, newTransaction];
-  const balancedTransactions = computeBalanceUnits(updatedTransactions);
+  const balancedTransactions = computeBalanceUnits(
+    updatedTransactions,
+    new Map(funds.map((fund) => [fund.fundId, fund]))
+  );
   writePortfolioWorkbook(workbookPath, workbook, funds, balancedTransactions);
   await persistWorkbookIfBlob(workbookContext);
 
@@ -177,7 +180,10 @@ export async function updateTransaction(
 
   const updatedTransactions = transactions.slice();
   updatedTransactions[transactionIndex] = updatedTransaction;
-  const balancedTransactions = computeBalanceUnits(updatedTransactions);
+  const balancedTransactions = computeBalanceUnits(
+    updatedTransactions,
+    new Map(funds.map((fund) => [fund.fundId, fund]))
+  );
 
   writePortfolioWorkbook(workbookPath, workbook, funds, balancedTransactions);
   await persistWorkbookIfBlob(workbookContext);
@@ -211,7 +217,10 @@ export async function deleteTransaction(rowId: string) {
     throw new Error("Transaction not found.");
   }
 
-  const balancedTransactions = computeBalanceUnits(updatedTransactions);
+  const balancedTransactions = computeBalanceUnits(
+    updatedTransactions,
+    new Map(funds.map((fund) => [fund.fundId, fund]))
+  );
   writePortfolioWorkbook(workbookPath, workbook, funds, balancedTransactions);
   await persistWorkbookIfBlob(workbookContext);
   const { funds: hydratedFunds, stockQuotesByFundId } =
@@ -473,9 +482,10 @@ function buildTransactionRecord({
   const nav = input.nav ?? selectedFund.latestNav ?? 0;
   const isMutualFund = (selectedFund.assetType || "").toLowerCase() === "mutual fund";
   const isGovtScheme = (selectedFund.assetType || "").toLowerCase() === "govt scheme";
-  const units =
+  const rawUnits =
     input.units ??
     ((isMutualFund || isGovtScheme) && nav > 0 ? amountInvested / nav : 0);
+  const units = roundUnitsByAssetType(rawUnits, selectedFund.assetType);
 
   return {
     rowId,
@@ -639,7 +649,10 @@ function writePortfolioWorkbook(
   const orderedTransactions = transactions
     .slice()
     .sort((left, right) => sortTransactionsAscending(left, right));
-  const balancedTransactions = computeBalanceUnits(orderedTransactions);
+  const balancedTransactions = computeBalanceUnits(
+    orderedTransactions,
+    new Map(funds.map((fund) => [fund.fundId, fund]))
+  );
   const fundSummaries = buildFundSummaries(funds, balancedTransactions);
   const yearlySummary = buildYearlyChart(balancedTransactions);
 
@@ -685,7 +698,11 @@ function writePortfolioWorkbook(
       transaction.sourceFile,
     ]),
   ]);
-  applyBalanceUnitsNumberFormat(workbook.Sheets["Transactions"], balancedTransactions.length);
+  applyBalanceUnitsNumberFormat(
+    workbook.Sheets["Transactions"],
+    balancedTransactions,
+    new Map(funds.map((fund) => [fund.fundId, fund]))
+  );
   workbook.Sheets["Transactions"]["!cols"] = [
     { wch: 12, hidden: true },
     { wch: 12 },
@@ -962,10 +979,14 @@ function buildFundSummaries(
       let costBasis = 0;
       let totalContributions = 0;
       let totalRedemptions = 0;
+      const unitAssetType = fund.assetType;
 
       for (const transaction of fundTransactions) {
         if (transaction.direction === "Contribution") {
-          currentUnits = roundToFour(currentUnits + transaction.units);
+          currentUnits = roundUnitsByAssetType(
+            currentUnits + transaction.units,
+            unitAssetType
+          );
           costBasis += transaction.normalizedAmount;
           totalContributions += transaction.normalizedAmount;
           continue;
@@ -974,7 +995,10 @@ function buildFundSummaries(
         const averageCostPerUnit = currentUnits > 0 ? costBasis / currentUnits : 0;
         const redeemedUnits = Math.min(transaction.units, currentUnits);
         costBasis = Math.max(0, costBasis - redeemedUnits * averageCostPerUnit);
-        currentUnits = roundToFour(Math.max(0, currentUnits - transaction.units));
+        currentUnits = roundUnitsByAssetType(
+          Math.max(0, currentUnits - transaction.units),
+          unitAssetType
+        );
         totalRedemptions += transaction.normalizedAmount;
       }
 
@@ -990,7 +1014,7 @@ function buildFundSummaries(
         folioNumber: fund.folioNumber,
         statementDate: fund.statementDate,
         latestNavDate: fund.latestNavDate,
-        currentUnits: roundToFour(currentUnits),
+        currentUnits: roundUnitsByAssetType(currentUnits, unitAssetType),
         latestNav: fund.latestNav,
         totalContributions: roundToTwo(totalContributions),
         totalRedemptions: roundToTwo(totalRedemptions),
@@ -1077,6 +1101,7 @@ function buildPortfolioFlowChart(
     }
 
     const latestNav = latestNavByFund.get(transaction.fundId) ?? 0;
+    const assetType = funds.find((fund) => fund.fundId === transaction.fundId)?.assetType ?? "";
     const position = positions.get(transaction.fundId) ?? {
       costBasis: 0,
       units: 0,
@@ -1084,7 +1109,10 @@ function buildPortfolioFlowChart(
 
     if (transaction.direction === "Contribution") {
       position.costBasis += transaction.normalizedAmount;
-      position.units = roundToFour(position.units + transaction.units);
+      position.units = roundUnitsByAssetType(
+        position.units + transaction.units,
+        assetType
+      );
       portfolioPurchaseValue += transaction.normalizedAmount;
     } else {
       const averageCostPerUnit =
@@ -1093,7 +1121,10 @@ function buildPortfolioFlowChart(
       const costReduction = redeemedUnits * averageCostPerUnit;
 
       position.costBasis = Math.max(0, position.costBasis - costReduction);
-      position.units = roundToFour(Math.max(0, position.units - transaction.units));
+      position.units = roundUnitsByAssetType(
+        Math.max(0, position.units - transaction.units),
+        assetType
+      );
       portfolioPurchaseValue = Math.max(0, portfolioPurchaseValue - costReduction);
     }
 
@@ -1203,7 +1234,10 @@ function roundToFour(value: number) {
   return Number(value.toFixed(4));
 }
 
-function computeBalanceUnits(transactions: TransactionRecord[]) {
+function computeBalanceUnits(
+  transactions: TransactionRecord[],
+  fundsById?: Map<string, FundRecord>
+) {
   const ordered = transactions
     .slice()
     .sort((left, right) => sortTransactionsAscending(left, right));
@@ -1214,7 +1248,8 @@ function computeBalanceUnits(transactions: TransactionRecord[]) {
     const units = Number.isFinite(transaction.units) ? transaction.units : 0;
     const nextRaw =
       transaction.direction === "Redemption" ? previous - units : previous + units;
-    const next = roundToFour(Math.max(0, nextRaw));
+    const assetType = fundsById?.get(transaction.fundId)?.assetType ?? "";
+    const next = roundUnitsByAssetType(Math.max(0, nextRaw), assetType);
     balances.set(transaction.fundId, next);
     return { ...transaction, balanceUnits: next };
   });
@@ -1222,27 +1257,37 @@ function computeBalanceUnits(transactions: TransactionRecord[]) {
 
 function applyBalanceUnitsNumberFormat(
   sheet: XLSX.WorkSheet | undefined,
-  rowCount: number
+  transactions: TransactionRecord[],
+  fundsById: Map<string, FundRecord>
 ) {
-  if (!sheet || rowCount <= 0) {
+  if (!sheet || transactions.length <= 0) {
     return;
   }
 
   // Balance Units is the 15th column (0-based index 14) in the AOA above.
   const balanceUnitsColumnIndex = 14;
-  for (let index = 0; index < rowCount; index += 1) {
+  for (let index = 0; index < transactions.length; index += 1) {
     const address = XLSX.utils.encode_cell({ r: index + 1, c: balanceUnitsColumnIndex });
     const cell = sheet[address] as XLSX.CellObject | undefined;
     if (!cell || cell.t !== "n") {
       continue;
     }
-    cell.z = "0.0000";
+    const assetType = fundsById.get(transactions[index]?.fundId)?.assetType ?? "";
+    cell.z = assetType.toLowerCase() === "mutual fund" ? "0.000" : "0.0000";
   }
 }
 
 function normalizeCashAmount(value: number) {
   const rounded = Math.round(value);
   return snapNearMultiple(rounded, 100, 2);
+}
+
+function roundUnitsByAssetType(value: number, assetType: string) {
+  const normalizedAssetType = String(assetType || "").toLowerCase();
+  if (normalizedAssetType === "mutual fund") {
+    return roundToThree(value);
+  }
+  return roundToFour(value);
 }
 
 function snapNearMultiple(value: number, multiple: number, tolerance: number) {
@@ -1252,4 +1297,8 @@ function snapNearMultiple(value: number, multiple: number, tolerance: number) {
 
   const snapped = Math.round(value / multiple) * multiple;
   return Math.abs(value - snapped) <= tolerance ? snapped : value;
+}
+
+function roundToThree(value: number) {
+  return Number(value.toFixed(3));
 }

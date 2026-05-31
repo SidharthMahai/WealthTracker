@@ -458,7 +458,7 @@ export function TransactionHistoryTable({
           <span>filtered redemptions</span>
         </div>
         <div className="history-chip">
-          <strong>{formatUnits(totals.units)}</strong>
+          <strong>{formatUnits(totals.units, getTotalsUnitPrecision(assetTypeFilter))}</strong>
           <span>filtered units</span>
         </div>
         <button type="button" className="secondary-button" onClick={resetFilters}>
@@ -496,6 +496,8 @@ export function TransactionHistoryTable({
 
             {filteredTransactions.map((transaction) => {
               const isEditing = editingRowId === transaction.rowId && draft;
+              const assetType = assetTypeByFundId.get(transaction.fundId) ?? "";
+              const unitPrecision = assetType === "mutual fund" ? 3 : 4;
               const signedAmount =
                 transaction.direction === "Redemption"
                   ? -transaction.normalizedAmount
@@ -577,7 +579,7 @@ export function TransactionHistoryTable({
                       <input
                         type="number"
                         min="0"
-                        step="0.0001"
+                        step={unitPrecision === 3 ? "0.001" : "0.0001"}
                         value={draft.units}
                         onChange={(event) => updateDraft("units", event.target.value)}
                       />
@@ -635,7 +637,9 @@ export function TransactionHistoryTable({
                   >
                     {formatInrFull(signedAmount)}
                   </td>
-                  <td className="numeric-cell">{formatUnits(signedUnits)}</td>
+                  <td className="numeric-cell">
+                    {formatUnits(signedUnits, unitPrecision)}
+                  </td>
                   <td className="numeric-cell">{formatNav(transaction.nav)}</td>
                   <td
                     className="numeric-cell folio-col"
@@ -678,7 +682,7 @@ export function TransactionHistoryTable({
                 <strong>{formatInrFull(totals.amount)}</strong>
               </td>
               <td className="numeric-cell">
-                <strong>{formatUnits(totals.units)}</strong>
+                <strong>{formatUnits(totals.units, getTotalsUnitPrecision(assetTypeFilter))}</strong>
               </td>
               <td className="numeric-cell">—</td>
               <td className="numeric-cell">—</td>
@@ -701,10 +705,10 @@ function formatInrFull(value: number) {
   }).format(value);
 }
 
-function formatUnits(value: number) {
-  const truncated = truncateDecimals(value, 8);
+function formatUnits(value: number, decimals = 4) {
+  const truncated = truncateDecimals(value, decimals);
   return new Intl.NumberFormat("en-IN", {
-    maximumFractionDigits: 8,
+    maximumFractionDigits: decimals,
     minimumFractionDigits: 0,
   }).format(truncated);
 }
@@ -732,6 +736,10 @@ function getEditableEntryTypeOptions(
   return Array.from(new Set([...entryTypeOptions, ...defaults, draft.transactionType]))
     .filter(Boolean)
     .sort((left, right) => left.localeCompare(right));
+}
+
+function getTotalsUnitPrecision(assetTypeFilter: string) {
+  return assetTypeFilter === "mutual fund" ? 3 : 4;
 }
 
 function normalizeValue(value: string) {
