@@ -194,6 +194,9 @@ function writeBudgetPlannerSheet(
     { wch: 18 },
     { wch: 40 },
   ];
+  if (!workbook.SheetNames.includes(BUDGET_SHEET_NAME)) {
+    workbook.SheetNames.push(BUDGET_SHEET_NAME);
+  }
 
   const workbookBuffer = XLSX.write(workbook, {
     type: "buffer",
