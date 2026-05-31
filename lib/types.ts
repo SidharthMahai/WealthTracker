@@ -4,6 +4,8 @@ export type FundRecord = {
   category: string;
   assetType: string;
   folioNumber: string;
+  accountNumber: string;
+  ifscCode: string;
   startDate: string;
   statementDate: string;
   latestNavDate: string;
@@ -42,6 +44,8 @@ export type FundSummary = {
   category: string;
   assetType: string;
   folioNumber: string;
+  accountNumber: string;
+  ifscCode: string;
   statementDate: string;
   latestNavDate: string;
   currentUnits: number;
@@ -49,6 +53,9 @@ export type FundSummary = {
   stockPriceUsd?: number;
   stockFxInrPerUsd?: number;
   stockAsOf?: string;
+  bankBalanceUsd?: number;
+  bankFxInrPerUsd?: number;
+  bankAsOf?: string;
   totalContributions: number;
   totalRedemptions: number;
   netCashFlow: number;
@@ -125,6 +132,9 @@ export type NewFundInput = {
   category: string;
   assetType: string;
   folioNumber?: string;
+  accountNumber?: string;
+  ifscCode?: string;
   startDate: string;
   latestNav?: number;
+  currentBalance?: number;
 };

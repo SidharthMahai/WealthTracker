@@ -17,7 +17,7 @@ import type {
   TransactionRecord,
 } from "@/lib/types";
 import type { WorkbookContext } from "@/lib/workbook-storage";
-import { fetchStockInrQuote } from "@/lib/market-data";
+import { fetchStockInrQuote, fetchUsdInrFx } from "@/lib/market-data";
 
 const DEFAULT_WORKBOOK_PATH = path.join(process.cwd(), "data", "Investment-Tracker.xlsx");
 
@@ -48,15 +48,33 @@ const updateNavSchema = z.object({
 const newFundSchema = z.object({
   name: z.string().trim().min(1),
   category: z.string().trim().min(1),
-  assetType: z.enum(["Mutual Fund", "Govt Scheme", "Stock"]),
+  assetType: z.enum([
+    "Mutual Fund",
+    "Govt Scheme",
+    "Stock",
+    "Bank Account (INR)",
+    "Bank Account (USD)",
+  ]),
   folioNumber: z.string().trim().optional().default(""),
+  accountNumber: z.string().trim().optional().default(""),
+  ifscCode: z.string().trim().optional().default(""),
   startDate: z.string().min(1),
   latestNav: z.number().positive().optional(),
+  currentBalance: z.number().nonnegative().optional(),
 });
 
 type FundPosition = {
   costBasis: number;
   units: number;
+};
+
+type StockInrQuote = Awaited<ReturnType<typeof fetchStockInrQuote>>;
+
+type UsdBankQuote = {
+  balanceUsd: number;
+  fxInrPerUsd: number;
+  valueInr: number;
+  asOf: string;
 };
 
 function buildEmptyDashboardData(): DashboardData {
@@ -93,13 +111,14 @@ export async function getDashboardData(): Promise<DashboardData> {
     return buildEmptyDashboardData();
   }
   const { funds, transactions } = readPortfolioWorkbook(workbookContext.localPath);
-  const { funds: hydratedFunds, stockQuotesByFundId } =
+  const { funds: hydratedFunds, stockQuotesByFundId, usdBankQuotesByFundId } =
     await hydrateFundsWithLiveMarketData(funds);
   return buildDashboardSnapshot(
     workbookContext,
     hydratedFunds,
     transactions,
-    stockQuotesByFundId
+    stockQuotesByFundId,
+    usdBankQuotesByFundId
   );
 }
 
@@ -133,7 +152,7 @@ export async function addTransaction(input: NewTransactionInput) {
   writePortfolioWorkbook(workbookPath, workbook, funds, balancedTransactions);
   await persistWorkbookIfBlob(workbookContext);
 
-  const { funds: hydratedFunds, stockQuotesByFundId } =
+  const { funds: hydratedFunds, stockQuotesByFundId, usdBankQuotesByFundId } =
     await hydrateFundsWithLiveMarketData(funds);
   return {
     entryId: newEntryId,
@@ -142,7 +161,8 @@ export async function addTransaction(input: NewTransactionInput) {
       workbookContext,
       hydratedFunds,
       balancedTransactions,
-      stockQuotesByFundId
+      stockQuotesByFundId,
+      usdBankQuotesByFundId
     ),
   };
 }
@@ -187,7 +207,7 @@ export async function updateTransaction(
 
   writePortfolioWorkbook(workbookPath, workbook, funds, balancedTransactions);
   await persistWorkbookIfBlob(workbookContext);
-  const { funds: hydratedFunds, stockQuotesByFundId } =
+  const { funds: hydratedFunds, stockQuotesByFundId, usdBankQuotesByFundId } =
     await hydrateFundsWithLiveMarketData(funds);
   return {
     entryId: existingTransaction.entryId,
@@ -196,7 +216,8 @@ export async function updateTransaction(
       workbookContext,
       hydratedFunds,
       balancedTransactions,
-      stockQuotesByFundId
+      stockQuotesByFundId,
+      usdBankQuotesByFundId
     ),
   };
 }
@@ -223,7 +244,7 @@ export async function deleteTransaction(rowId: string) {
   );
   writePortfolioWorkbook(workbookPath, workbook, funds, balancedTransactions);
   await persistWorkbookIfBlob(workbookContext);
-  const { funds: hydratedFunds, stockQuotesByFundId } =
+  const { funds: hydratedFunds, stockQuotesByFundId, usdBankQuotesByFundId } =
     await hydrateFundsWithLiveMarketData(funds);
   return {
     rowId,
@@ -231,7 +252,8 @@ export async function deleteTransaction(rowId: string) {
       workbookContext,
       hydratedFunds,
       balancedTransactions,
-      stockQuotesByFundId
+      stockQuotesByFundId,
+      usdBankQuotesByFundId
     ),
   };
 }
@@ -265,7 +287,7 @@ export async function updateFundLatestNav(input: {
   writePortfolioWorkbook(workbookPath, workbook, funds, transactions);
   await persistWorkbookIfBlob(workbookContext);
 
-  const { funds: hydratedFunds, stockQuotesByFundId } =
+  const { funds: hydratedFunds, stockQuotesByFundId, usdBankQuotesByFundId } =
     await hydrateFundsWithLiveMarketData(funds);
   return {
     fundId: fund.fundId,
@@ -273,7 +295,8 @@ export async function updateFundLatestNav(input: {
       workbookContext,
       hydratedFunds,
       transactions,
-      stockQuotesByFundId
+      stockQuotesByFundId,
+      usdBankQuotesByFundId
     ),
   };
 }
@@ -288,31 +311,79 @@ export async function addFund(input: NewFundInput) {
     throw new Error("Workbook could not be opened.");
   }
 
+  const isInrBank = parsed.assetType === "Bank Account (INR)";
+  const isUsdBank = parsed.assetType === "Bank Account (USD)";
+
   if (
     funds.some(
       (fund) =>
         fund.name.trim().toLowerCase() === parsed.name.toLowerCase() &&
-        fund.folioNumber.trim().toLowerCase() === parsed.folioNumber.toLowerCase()
+        (isInrBank || isUsdBank
+          ? fund.accountNumber.trim().toLowerCase() === parsed.accountNumber.toLowerCase()
+          : fund.folioNumber.trim().toLowerCase() === parsed.folioNumber.toLowerCase())
     )
   ) {
-    throw new Error("A fund with this name and folio already exists.");
+    throw new Error(
+      isInrBank || isUsdBank
+        ? "A bank account with this name and account number already exists."
+        : "A fund with this name and folio already exists."
+    );
   }
 
-  const latestNav = parsed.latestNav ?? 0;
-  const latestNavDate = latestNav > 0 ? parsed.startDate : "";
+  const currentBalance = roundToTwo(parsed.currentBalance ?? 0);
+
+  if ((isInrBank || isUsdBank) && currentBalance <= 0) {
+    throw new Error("Please enter the current balance for the bank account.");
+  }
+
+  if (!isInrBank && !isUsdBank && parsed.accountNumber) {
+    throw new Error("Account number is only supported for bank accounts.");
+  }
+
+  if (!isInrBank && parsed.ifscCode) {
+    throw new Error("IFSC code is only supported for Indian bank accounts.");
+  }
+
+  if ((isInrBank || isUsdBank) && !parsed.accountNumber) {
+    throw new Error("Please enter the bank account number.");
+  }
+
+  if (isInrBank && !parsed.ifscCode) {
+    throw new Error("Please enter the IFSC code.");
+  }
+
+  let latestNav = isInrBank ? 1 : parsed.latestNav ?? 0;
+  let latestNavDate = latestNav > 0 ? parsed.startDate : "";
+  let statementDate = latestNavDate;
+  let currentValue = isInrBank ? currentBalance : 0;
+
+  if (isUsdBank) {
+    try {
+      const fx = await fetchUsdInrFx();
+      latestNav = roundToFour(fx.inrPerUsd);
+      latestNavDate = fx.asOf.slice(0, 10);
+      statementDate = latestNavDate;
+      currentValue = roundToTwo(currentBalance * fx.inrPerUsd);
+    } catch {
+      currentValue = roundToTwo(currentBalance * latestNav);
+    }
+  }
+
   const newFund: FundRecord = {
     fundId: buildFundId(funds, parsed),
     name: parsed.name,
     category: parsed.category,
     assetType: parsed.assetType,
     folioNumber: parsed.folioNumber,
+    accountNumber: parsed.accountNumber,
+    ifscCode: parsed.ifscCode.toUpperCase(),
     startDate: parsed.startDate,
-    statementDate: latestNavDate,
+    statementDate,
     latestNavDate,
-    currentUnits: 0,
+    currentUnits: currentBalance,
     latestNav,
     holdingCost: 0,
-    currentValue: 0,
+    currentValue,
     profitLoss: 0,
     absoluteReturn: 0,
   };
@@ -320,7 +391,7 @@ export async function addFund(input: NewFundInput) {
   writePortfolioWorkbook(workbookPath, workbook, [...funds, newFund], transactions);
   await persistWorkbookIfBlob(workbookContext);
 
-  const { funds: hydratedFunds, stockQuotesByFundId } =
+  const { funds: hydratedFunds, stockQuotesByFundId, usdBankQuotesByFundId } =
     await hydrateFundsWithLiveMarketData([...funds, newFund]);
   return {
     fundId: newFund.fundId,
@@ -328,71 +399,126 @@ export async function addFund(input: NewFundInput) {
       workbookContext,
       hydratedFunds,
       transactions,
-      stockQuotesByFundId
+      stockQuotesByFundId,
+      usdBankQuotesByFundId
     ),
   };
 }
 
-type StockInrQuote = Awaited<ReturnType<typeof fetchStockInrQuote>>;
-
 async function hydrateFundsWithLiveMarketData(funds: FundRecord[]): Promise<{
   funds: FundRecord[];
   stockQuotesByFundId: Map<string, StockInrQuote>;
+  usdBankQuotesByFundId: Map<string, UsdBankQuote>;
 }> {
-  const stockFunds = funds.filter(
-    (fund) => (fund.assetType || "").toLowerCase() === "stock"
+  const stockFunds = funds.filter((fund) => (fund.assetType || "").toLowerCase() === "stock");
+  const usdBankFunds = funds.filter(
+    (fund) => (fund.assetType || "").toLowerCase() === "bank account (usd)"
   );
-  if (stockFunds.length === 0) {
-    return { funds, stockQuotesByFundId: new Map() };
+  if (stockFunds.length === 0 && usdBankFunds.length === 0) {
+    return {
+      funds,
+      stockQuotesByFundId: new Map(),
+      usdBankQuotesByFundId: new Map(),
+    };
   }
 
   const byFundId = new Map<string, string>([["STOCK-XOM", "XOM"]]);
   const cloned = funds.map((fund) => ({ ...fund }));
   const stockQuotesByFundId = new Map<string, StockInrQuote>();
+  const usdBankQuotesByFundId = new Map<string, UsdBankQuote>();
 
   await Promise.all(
     cloned.map(async (fund) => {
-      const ticker = byFundId.get(fund.fundId);
-      if (!ticker) {
+      const assetType = (fund.assetType || "").toLowerCase();
+      if (assetType === "stock") {
+        const ticker = byFundId.get(fund.fundId);
+        if (!ticker) {
+          return;
+        }
+
+        try {
+          const quote = await fetchStockInrQuote(ticker);
+          fund.latestNav = roundToTwo(quote.priceInr);
+          fund.latestNavDate = new Date().toISOString().slice(0, 10);
+          stockQuotesByFundId.set(fund.fundId, quote);
+        } catch {
+          // Keep workbook-provided latestNav if live fetch fails.
+        }
+        return;
+      }
+
+      if (assetType !== "bank account (usd)") {
         return;
       }
 
       try {
-        const quote = await fetchStockInrQuote(ticker);
-        fund.latestNav = roundToTwo(quote.priceInr);
-        fund.latestNavDate = new Date().toISOString().slice(0, 10);
-        stockQuotesByFundId.set(fund.fundId, quote);
+        const fx = await fetchUsdInrFx();
+        const valueInr = roundToTwo(fund.currentUnits * fx.inrPerUsd);
+        fund.latestNav = roundToFour(fx.inrPerUsd);
+        fund.latestNavDate = fx.asOf.slice(0, 10);
+        fund.currentValue = valueInr;
+        fund.statementDate = fx.asOf.slice(0, 10);
+        usdBankQuotesByFundId.set(fund.fundId, {
+          balanceUsd: roundToTwo(fund.currentUnits),
+          fxInrPerUsd: roundToFour(fx.inrPerUsd),
+          valueInr,
+          asOf: fx.asOf,
+        });
       } catch {
-        // Keep workbook-provided latestNav if live fetch fails.
+        // Keep workbook-provided FX-derived value if live fetch fails.
       }
     })
   );
 
-  return { funds: cloned, stockQuotesByFundId };
+  return { funds: cloned, stockQuotesByFundId, usdBankQuotesByFundId };
 }
 
 function buildDashboardSnapshot(
   workbookContext: WorkbookContext,
   funds: FundRecord[],
   transactions: TransactionRecord[],
-  stockQuotesByFundId?: Map<string, StockInrQuote>
+  stockQuotesByFundId?: Map<string, StockInrQuote>,
+  usdBankQuotesByFundId?: Map<string, UsdBankQuote>
 ): DashboardData {
   const baseFundSummaries = buildFundSummaries(funds, transactions);
   const fundSummaries = baseFundSummaries.map((summary) => {
-    if ((summary.assetType || "").toLowerCase() !== "stock") {
-      return summary;
+    const assetType = (summary.assetType || "").toLowerCase();
+    if (assetType === "stock") {
+      const quote = stockQuotesByFundId?.get(summary.fundId);
+      if (!quote) {
+        return summary;
+      }
+
+      return {
+        ...summary,
+        stockPriceUsd: roundToTwo(quote.priceUsd),
+        stockFxInrPerUsd: roundToTwo(quote.fxInrPerUsd),
+        stockAsOf: quote.asOf,
+      };
     }
 
-    const quote = stockQuotesByFundId?.get(summary.fundId);
-    if (!quote) {
+    if (assetType === "bank account (usd)") {
+      const quote = usdBankQuotesByFundId?.get(summary.fundId);
+      if (!quote) {
+        return summary;
+      }
+
+      return {
+        ...summary,
+        bankBalanceUsd: quote.balanceUsd,
+        bankFxInrPerUsd: quote.fxInrPerUsd,
+        bankAsOf: quote.asOf,
+        currentValue: quote.valueInr,
+      };
+    }
+
+    if (assetType !== "bank account (inr)") {
       return summary;
     }
 
     return {
       ...summary,
-      stockPriceUsd: roundToTwo(quote.priceUsd),
-      stockFxInrPerUsd: roundToTwo(quote.fxInrPerUsd),
-      stockAsOf: quote.asOf,
+      currentValue: roundToTwo(summary.currentUnits),
     };
   });
   const activeFundSummaries = fundSummaries.filter(hasOpenPosition);
@@ -406,7 +532,6 @@ function buildDashboardSnapshot(
   const stockSummaries = fundSummaries.filter(
     (fund) => (fund.assetType || "").toLowerCase() === "stock"
   );
-
   const mutualFundPurchaseValue = sumBy(mutualFundSummaries, (fund) => fund.totalInvested);
   const mutualFundCurrentValue = sumBy(mutualFundSummaries, (fund) => fund.currentValue);
   const mutualFundProfitLoss = sumBy(mutualFundSummaries, (fund) => fund.profitLoss);
@@ -437,14 +562,19 @@ function buildDashboardSnapshot(
       stockCurrentValue,
       netWorthCurrentValue,
     },
-    funds: fundSummaries.map((fund) => ({
+    funds: fundSummaries
+      .filter((fund) => !(fund.assetType || "").toLowerCase().startsWith("bank account"))
+      .map((fund) => ({
       fundId: fund.fundId,
       name: fund.name,
       assetType: fund.assetType,
     })),
     fundSummaries,
     fundChart: activeFundSummaries
-      .filter((fund) => (fund.assetType || "").toLowerCase() !== "stock")
+      .filter((fund) => {
+        const assetType = (fund.assetType || "").toLowerCase();
+        return assetType !== "stock" && !assetType.startsWith("bank account");
+      })
       .map((fund) => ({
       fundId: fund.fundId,
       name: fund.name,
@@ -453,7 +583,7 @@ function buildDashboardSnapshot(
     })),
     portfolioFlowChart: buildPortfolioFlowChart(transactions, funds),
     yearlyChart: buildYearlyChart(transactions),
-    categoryChart: buildCategoryChart(activeFundSummaries),
+    categoryChart: buildCategoryChart([...activeFundSummaries]),
     transactions: transactions
       .slice()
       .sort((left, right) => sortTransactionsDescending(left, right)),
@@ -602,9 +732,13 @@ function buildFundId(
     input.assetType === "Mutual Fund"
       ? "MF"
       : input.assetType === "Govt Scheme"
-        ? "GS"
-        : "ST";
-  const folioPart = input.folioNumber
+      ? "GS"
+      : input.assetType === "Stock"
+        ? "ST"
+        : input.assetType === "Bank Account (INR)"
+          ? "BANK-INR"
+          : "BANK-USD";
+  const folioPart = (input.folioNumber || input.accountNumber || "")
     .toUpperCase()
     .replace(/[^A-Z0-9]+/g, "")
     .slice(-12);
@@ -731,6 +865,8 @@ function writePortfolioWorkbook(
       "Category",
       "Asset Type",
       "Folio Number",
+      "Account Number",
+      "IFSC Code",
       "Start Date",
       "Statement Date",
       "Latest NAV Date",
@@ -749,6 +885,8 @@ function writePortfolioWorkbook(
         fund.category,
         fund.assetType,
         fund.folioNumber,
+        fund.accountNumber,
+        fund.ifscCode,
         fund.startDate,
         fund.statementDate,
         fund.latestNavDate,
@@ -767,6 +905,8 @@ function writePortfolioWorkbook(
     { wch: 20 },
     { wch: 16 },
     { wch: 18 },
+    { wch: 20 },
+    { wch: 14 },
     { wch: 14 },
     { wch: 14 },
     { wch: 14 },
@@ -872,6 +1012,8 @@ function parseFunds(workbook: XLSX.WorkBook): FundRecord[] {
         category: String(row["Category"] || ""),
         assetType: String(row["Asset Type"] || ""),
         folioNumber: String(row["Folio Number"] || ""),
+        accountNumber: String(row["Account Number"] || row["Bank Account Number"] || ""),
+        ifscCode: String(row["IFSC Code"] || ""),
         startDate: String(row["Start Date"] || ""),
         statementDate: String(row["Statement Date"] || ""),
         latestNavDate: String(row["Latest NAV Date"] || ""),
@@ -960,6 +1102,8 @@ function buildFundSummaries(
           category: fund.category,
           assetType: fund.assetType,
           folioNumber: fund.folioNumber,
+          accountNumber: fund.accountNumber,
+          ifscCode: fund.ifscCode,
           statementDate: fund.statementDate,
           latestNavDate: fund.latestNavDate,
           currentUnits: fund.currentUnits,
@@ -967,10 +1111,10 @@ function buildFundSummaries(
           totalContributions: 0,
           totalRedemptions: 0,
           netCashFlow: 0,
-          totalInvested: fund.holdingCost,
-          currentValue: fund.currentValue,
-          profitLoss: fund.profitLoss,
-          absoluteReturn: fund.absoluteReturn,
+          totalInvested: isBankAccountAssetType(fund.assetType) ? 0 : fund.holdingCost,
+          currentValue: getStaticHoldingCurrentValue(fund),
+          profitLoss: isBankAccountAssetType(fund.assetType) ? 0 : fund.profitLoss,
+          absoluteReturn: isBankAccountAssetType(fund.assetType) ? 0 : fund.absoluteReturn,
           transactionCount: 0,
         };
       }
@@ -1012,6 +1156,8 @@ function buildFundSummaries(
         category: fund.category,
         assetType: fund.assetType,
         folioNumber: fund.folioNumber,
+        accountNumber: fund.accountNumber,
+        ifscCode: fund.ifscCode,
         statementDate: fund.statementDate,
         latestNavDate: fund.latestNavDate,
         currentUnits: roundUnitsByAssetType(currentUnits, unitAssetType),
@@ -1177,6 +1323,10 @@ function buildCategoryChart(fundSummaries: FundSummary[]) {
 }
 
 function hasOpenPosition(fund: FundSummary) {
+  if (isBankAccountAssetType(fund.assetType)) {
+    return Math.abs(fund.currentValue) > 0.005;
+  }
+
   return (
     Math.abs(fund.currentUnits) > 0.0001 ||
     Math.abs(fund.currentValue) > 0.005 ||
@@ -1287,7 +1437,25 @@ function roundUnitsByAssetType(value: number, assetType: string) {
   if (normalizedAssetType === "mutual fund") {
     return roundToThree(value);
   }
+  if (normalizedAssetType.startsWith("bank account")) {
+    return roundToTwo(value);
+  }
   return roundToFour(value);
+}
+
+function isBankAccountAssetType(assetType: string) {
+  return String(assetType || "").toLowerCase().startsWith("bank account");
+}
+
+function getStaticHoldingCurrentValue(fund: FundRecord) {
+  const assetType = (fund.assetType || "").toLowerCase();
+  if (assetType === "bank account (inr)") {
+    return roundToTwo(fund.currentUnits);
+  }
+  if (assetType === "bank account (usd)") {
+    return roundToTwo(fund.currentUnits * fund.latestNav);
+  }
+  return fund.currentValue;
 }
 
 function snapNearMultiple(value: number, multiple: number, tolerance: number) {

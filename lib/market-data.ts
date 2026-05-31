@@ -77,7 +77,7 @@ function toNumber(value: unknown) {
   return Number.isFinite(numeric) ? numeric : 0;
 }
 
-async function fetchUsdInrFx(): Promise<FxQuote> {
+export async function fetchUsdInrFx(): Promise<FxQuote> {
   const now = new Date();
   if (fxCache && Date.now() - fxCache.fetchedAt < FX_CACHE_TTL_MS) {
     return fxCache.quote;

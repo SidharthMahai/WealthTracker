@@ -58,8 +58,11 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
     category: "",
     assetType: "Mutual Fund",
     folioNumber: "",
+    accountNumber: "",
+    ifscCode: "",
     startDate: new Date().toISOString().slice(0, 10),
     latestNav: "",
+    currentBalance: "",
   });
 
   useEffect(() => {
@@ -137,6 +140,9 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
 
   const workbookConfigured =
     currentDashboard.workbookName !== "No workbook configured";
+  const isNewBankAccount = newFundForm.assetType.startsWith("Bank Account");
+  const isNewIndianBankAccount = newFundForm.assetType === "Bank Account (INR)";
+  const isNewUsdBankAccount = newFundForm.assetType === "Bank Account (USD)";
 
   const fundMetaById = useMemo(() => {
     return new Map(
@@ -273,6 +279,9 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
         body: JSON.stringify({
           ...newFundForm,
           latestNav: newFundForm.latestNav ? Number(newFundForm.latestNav) : undefined,
+          currentBalance: newFundForm.currentBalance
+            ? Number(newFundForm.currentBalance)
+            : undefined,
         }),
       });
       const payload = (await response.json()) as {
@@ -295,8 +304,11 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
         category: "",
         assetType: "Mutual Fund",
         folioNumber: "",
+        accountNumber: "",
+        ifscCode: "",
         startDate: new Date().toISOString().slice(0, 10),
         latestNav: "",
+        currentBalance: "",
       });
       setShowNewFundForm(false);
     } catch (error) {
@@ -900,7 +912,7 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
               className="secondary-button"
               onClick={() => setShowNewFundForm((current) => !current)}
             >
-              {showNewFundForm ? "Close new folio" : "Add new folio"}
+              {showNewFundForm ? "Close new holding" : "Add new holding"}
             </button>
           </div>
         </div>
@@ -909,17 +921,17 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
           <form className="panel inset-panel" onSubmit={createFund}>
             <div className="panel-heading compact-heading">
               <div>
-                <h2>New fund or folio</h2>
+                <h2>New holding</h2>
               </div>
               <p className="muted">
-                Create the folio first, then add the first transaction from the main
-                entry form above.
+                Create a fund, folio, or bank account here. Investment transactions
+                still go through the main entry form above.
               </p>
             </div>
 
             <div className="form-grid">
               <label>
-                <span>Fund Name</span>
+                <span>{isNewBankAccount ? "Bank / Account Name" : "Fund Name"}</span>
                 <input
                   type="text"
                   value={newFundForm.name}
@@ -930,19 +942,36 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
                 />
               </label>
 
-              <label>
-                <span>Folio Number</span>
-                <input
-                  type="text"
-                  value={newFundForm.folioNumber}
-                  onChange={(event) =>
-                    setNewFundForm((current) => ({
-                      ...current,
-                      folioNumber: event.target.value,
-                    }))
-                  }
-                />
-              </label>
+              {!isNewBankAccount ? (
+                <label>
+                  <span>Folio Number</span>
+                  <input
+                    type="text"
+                    value={newFundForm.folioNumber}
+                    onChange={(event) =>
+                      setNewFundForm((current) => ({
+                        ...current,
+                        folioNumber: event.target.value,
+                      }))
+                    }
+                  />
+                </label>
+              ) : (
+                <label>
+                  <span>Account Number</span>
+                  <input
+                    type="text"
+                    value={newFundForm.accountNumber}
+                    onChange={(event) =>
+                      setNewFundForm((current) => ({
+                        ...current,
+                        accountNumber: event.target.value,
+                      }))
+                    }
+                    required
+                  />
+                </label>
+              )}
 
               <label>
                 <span>Type</span>
@@ -952,12 +981,31 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
                     setNewFundForm((current) => ({
                       ...current,
                       assetType: event.target.value,
+                      folioNumber: event.target.value.startsWith("Bank Account")
+                        ? ""
+                        : current.folioNumber,
+                      accountNumber: event.target.value.startsWith("Bank Account")
+                        ? current.accountNumber
+                        : "",
+                      ifscCode: event.target.value === "Bank Account (INR)"
+                        ? current.ifscCode
+                        : "",
+                      latestNav:
+                        event.target.value === "Govt Scheme" ||
+                        event.target.value === "Mutual Fund"
+                          ? current.latestNav
+                          : "",
+                      currentBalance: event.target.value.startsWith("Bank Account")
+                        ? current.currentBalance
+                        : "",
                     }))
                   }
                 >
                   <option value="Mutual Fund">Mutual Fund</option>
                   <option value="Govt Scheme">Govt Scheme</option>
                   <option value="Stock">Stock</option>
+                  <option value="Bank Account (INR)">Bank Account (INR)</option>
+                  <option value="Bank Account (USD)">Bank Account (USD)</option>
                 </select>
               </label>
 
@@ -976,6 +1024,23 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
                 />
               </label>
 
+              {isNewIndianBankAccount ? (
+                <label>
+                  <span>IFSC Code</span>
+                  <input
+                    type="text"
+                    value={newFundForm.ifscCode}
+                    onChange={(event) =>
+                      setNewFundForm((current) => ({
+                        ...current,
+                        ifscCode: event.target.value.toUpperCase(),
+                      }))
+                    }
+                    required
+                  />
+                </label>
+              ) : null}
+
               <label>
                 <span>Start Date</span>
                 <input
@@ -991,7 +1056,26 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
                 />
               </label>
 
-              {newFundForm.assetType !== "Stock" ? (
+              {isNewBankAccount ? (
+                <label>
+                  <span>
+                    Current Balance {isNewUsdBankAccount ? "(USD)" : "(INR)"}
+                  </span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={newFundForm.currentBalance}
+                    onChange={(event) =>
+                      setNewFundForm((current) => ({
+                        ...current,
+                        currentBalance: event.target.value,
+                      }))
+                    }
+                    required
+                  />
+                </label>
+              ) : newFundForm.assetType !== "Stock" ? (
                 <label>
                   <span>Current NAV</span>
                   <input
@@ -1012,9 +1096,15 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
             </div>
 
             <div className="form-footer">
-              <p className="muted">This adds the fund master row only.</p>
+              <p className="muted">
+                {isNewUsdBankAccount
+                  ? "USD accounts use live USD to INR conversion for totals."
+                  : isNewBankAccount
+                    ? "Bank balances are stored as current holdings snapshots."
+                    : "This adds the fund master row only."}
+              </p>
               <button type="submit" disabled={refreshing}>
-                Create folio
+                Create holding
               </button>
             </div>
           </form>
@@ -1027,7 +1117,7 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
                 <th>Fund</th>
                 <th>Category</th>
                 <th>Type</th>
-                <th>Balance Units</th>
+                <th>Balance / Units</th>
                 <th>Purchase Value</th>
                 <th className="current-value-col">Current Value</th>
                 <th className="profit-col">Profit or Loss</th>
@@ -1040,7 +1130,14 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
                 <tr key={fund.fundId}>
                   <td>
                     <strong>{fund.name}</strong>
-                    <span className="subtle-line">Folio {fund.folioNumber}</span>
+                    {fund.accountNumber ? (
+                      <span className="subtle-line">A/C {fund.accountNumber}</span>
+                    ) : fund.folioNumber ? (
+                      <span className="subtle-line">Folio {fund.folioNumber}</span>
+                    ) : null}
+                    {fund.ifscCode ? (
+                      <span className="subtle-line">IFSC {fund.ifscCode}</span>
+                    ) : null}
                   </td>
                   <td>{fund.category}</td>
                   <td>{fund.assetType || "—"}</td>
@@ -1048,13 +1145,26 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
                     {formatUnitsValue(fund.currentUnits, fund.assetType)}
                   </td>
                   <td className="numeric-cell">
-                    {fund.assetType === "Stock" ? "—" : formatInrFull(fund.totalInvested)}
+                    {fund.assetType === "Stock" || fund.assetType.startsWith("Bank Account")
+                      ? "—"
+                      : formatInrFull(fund.totalInvested)}
                   </td>
                   <td className="numeric-cell current-value-col">
                     {formatInrFull(fund.currentValue)}
                     {fund.assetType === "Stock" && fund.stockPriceUsd ? (
                       <span className="subtle-line nav-meta">
                         1 share: {formatUsd(fund.stockPriceUsd)}
+                      </span>
+                    ) : fund.assetType === "Bank Account (USD)" && fund.bankBalanceUsd ? (
+                      <span className="subtle-line nav-meta">
+                        Balance {formatUsd(fund.bankBalanceUsd)}
+                        {fund.bankFxInrPerUsd
+                          ? ` · FX ${formatNavInr(fund.bankFxInrPerUsd)}/USD`
+                          : ""}
+                      </span>
+                    ) : fund.assetType === "Bank Account (INR)" ? (
+                      <span className="subtle-line nav-meta">
+                        Balance {formatInrFull(fund.currentUnits)}
                       </span>
                     ) : fund.assetType === "Mutual Fund" && fund.latestNav ? (
                       <span className="subtle-line nav-meta">
@@ -1068,14 +1178,18 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
                       fund.profitLoss >= 0 ? "text-positive" : "text-negative"
                     }`}
                   >
-                    {fund.assetType === "Stock" ? "—" : formatInrFull(fund.profitLoss)}
+                    {fund.assetType === "Stock" || fund.assetType.startsWith("Bank Account")
+                      ? "—"
+                      : formatInrFull(fund.profitLoss)}
                   </td>
                   <td
                     className={`numeric-cell ${
                       fund.absoluteReturn >= 0 ? "text-positive" : "text-negative"
                     }`}
                   >
-                    {fund.assetType === "Stock" ? "—" : formatPercent(fund.absoluteReturn)}
+                    {fund.assetType === "Stock" || fund.assetType.startsWith("Bank Account")
+                      ? "—"
+                      : formatPercent(fund.absoluteReturn)}
                   </td>
                   <td className="actions-cell">
                     {fund.assetType === "Mutual Fund" ? (
@@ -1157,7 +1271,7 @@ function formatNavInr(value: number) {
 }
 
 function formatUnitsValue(value: number, assetType = "") {
-  const decimals = assetType === "Mutual Fund" ? 3 : 4;
+  const decimals = assetType === "Mutual Fund" ? 3 : assetType.startsWith("Bank Account") ? 2 : 4;
   const truncated = truncateDecimals(value, decimals);
   return new Intl.NumberFormat("en-IN", {
     maximumFractionDigits: decimals,
@@ -1166,6 +1280,10 @@ function formatUnitsValue(value: number, assetType = "") {
 }
 
 function hasOpenPosition(fund: DashboardData["fundSummaries"][number]) {
+  if (fund.assetType.startsWith("Bank Account")) {
+    return Math.abs(fund.currentValue) > 0.005;
+  }
+
   return (
     Math.abs(fund.currentUnits) > 0.0001 ||
     Math.abs(fund.currentValue) > 0.005 ||
