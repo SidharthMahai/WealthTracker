@@ -316,6 +316,28 @@ code {
   margin: 0;
 }
 
+.panel-heading-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.compact-heading {
+  margin-bottom: 14px;
+}
+
+.compact-heading h2 {
+  font-size: 1.2rem;
+}
+
+.inset-panel {
+  margin-bottom: 18px;
+  border-radius: 18px;
+  background: var(--bg-overlay);
+  box-shadow: none;
+}
+
 .chart-frame {
   height: 380px;
 }
@@ -694,6 +716,7 @@ tfoot td {
 
   .hero-card-row,
   .panel-heading,
+  .panel-heading-actions,
   .form-footer {
     flex-direction: column;
     align-items: flex-start;

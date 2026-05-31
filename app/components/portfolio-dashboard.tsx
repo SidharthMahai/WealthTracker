@@ -52,6 +52,15 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
     "all" | "mutual_funds" | "govt_schemes"
   >("all");
   const [flowFocus, setFlowFocus] = useState<"purchase" | "current">("current");
+  const [showNewFundForm, setShowNewFundForm] = useState(false);
+  const [newFundForm, setNewFundForm] = useState({
+    name: "",
+    category: "",
+    assetType: "Mutual Fund",
+    folioNumber: "",
+    startDate: new Date().toISOString().slice(0, 10),
+    latestNav: "",
+  });
 
   useEffect(() => {
     setCurrentDashboard(dashboard);
@@ -246,6 +255,53 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
     } catch (error) {
       setRefreshError(
         error instanceof Error ? error.message : "Unable to update NAV."
+      );
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
+  async function createFund(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    try {
+      setRefreshing(true);
+      setRefreshError("");
+      const response = await fetch("/api/funds", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...newFundForm,
+          latestNav: newFundForm.latestNav ? Number(newFundForm.latestNav) : undefined,
+        }),
+      });
+      const payload = (await response.json()) as {
+        ok?: boolean;
+        error?: string;
+        dashboard?: DashboardData;
+      };
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Unable to create fund.");
+      }
+
+      if (payload.dashboard) {
+        applyDashboardUpdate(payload.dashboard);
+      } else {
+        await refreshDashboard();
+      }
+
+      setNewFundForm({
+        name: "",
+        category: "",
+        assetType: "Mutual Fund",
+        folioNumber: "",
+        startDate: new Date().toISOString().slice(0, 10),
+        latestNav: "",
+      });
+      setShowNewFundForm(false);
+    } catch (error) {
+      setRefreshError(
+        error instanceof Error ? error.message : "Unable to create fund."
       );
     } finally {
       setRefreshing(false);
@@ -834,11 +890,135 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
             <p className="eyebrow">Holdings</p>
             <h2>Fund summary</h2>
           </div>
-          <p className="muted">
-            Purchase value is recalculated from the transaction history, and current
-            value uses the latest NAV for the remaining units.
-          </p>
+          <div className="panel-heading-actions">
+            <p className="muted">
+              Purchase value is recalculated from the transaction history, and current
+              value uses the latest NAV for the remaining units.
+            </p>
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => setShowNewFundForm((current) => !current)}
+            >
+              {showNewFundForm ? "Close new folio" : "Add new folio"}
+            </button>
+          </div>
         </div>
+
+        {showNewFundForm ? (
+          <form className="panel inset-panel" onSubmit={createFund}>
+            <div className="panel-heading compact-heading">
+              <div>
+                <h2>New fund or folio</h2>
+              </div>
+              <p className="muted">
+                Create the folio first, then add the first transaction from the main
+                entry form above.
+              </p>
+            </div>
+
+            <div className="form-grid">
+              <label>
+                <span>Fund Name</span>
+                <input
+                  type="text"
+                  value={newFundForm.name}
+                  onChange={(event) =>
+                    setNewFundForm((current) => ({ ...current, name: event.target.value }))
+                  }
+                  required
+                />
+              </label>
+
+              <label>
+                <span>Folio Number</span>
+                <input
+                  type="text"
+                  value={newFundForm.folioNumber}
+                  onChange={(event) =>
+                    setNewFundForm((current) => ({
+                      ...current,
+                      folioNumber: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+
+              <label>
+                <span>Type</span>
+                <select
+                  value={newFundForm.assetType}
+                  onChange={(event) =>
+                    setNewFundForm((current) => ({
+                      ...current,
+                      assetType: event.target.value,
+                    }))
+                  }
+                >
+                  <option value="Mutual Fund">Mutual Fund</option>
+                  <option value="Govt Scheme">Govt Scheme</option>
+                  <option value="Stock">Stock</option>
+                </select>
+              </label>
+
+              <label>
+                <span>Category</span>
+                <input
+                  type="text"
+                  value={newFundForm.category}
+                  onChange={(event) =>
+                    setNewFundForm((current) => ({
+                      ...current,
+                      category: event.target.value,
+                    }))
+                  }
+                  required
+                />
+              </label>
+
+              <label>
+                <span>Start Date</span>
+                <input
+                  type="date"
+                  value={newFundForm.startDate}
+                  onChange={(event) =>
+                    setNewFundForm((current) => ({
+                      ...current,
+                      startDate: event.target.value,
+                    }))
+                  }
+                  required
+                />
+              </label>
+
+              {newFundForm.assetType !== "Stock" ? (
+                <label>
+                  <span>Current NAV</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.0001"
+                    value={newFundForm.latestNav}
+                    onChange={(event) =>
+                      setNewFundForm((current) => ({
+                        ...current,
+                        latestNav: event.target.value,
+                      }))
+                    }
+                    placeholder="Optional"
+                  />
+                </label>
+              ) : null}
+            </div>
+
+            <div className="form-footer">
+              <p className="muted">This adds the fund master row only.</p>
+              <button type="submit" disabled={refreshing}>
+                Create folio
+              </button>
+            </div>
+          </form>
+        ) : null}
 
         <div className="table-scroll">
           <table className="holdings-table">

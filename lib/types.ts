@@ -119,3 +119,12 @@ export type NewTransactionInput = {
   nav?: number;
   currentNav?: number;
 };
+
+export type NewFundInput = {
+  name: string;
+  category: string;
+  assetType: string;
+  folioNumber?: string;
+  startDate: string;
+  latestNav?: number;
+};

@@ -12,6 +12,7 @@ import type {
   DashboardData,
   FundRecord,
   FundSummary,
+  NewFundInput,
   NewTransactionInput,
   TransactionRecord,
 } from "@/lib/types";
@@ -42,6 +43,15 @@ const updateNavSchema = z.object({
   fundId: z.string().min(1),
   latestNav: z.number().positive(),
   latestNavDate: z.string().min(1),
+});
+
+const newFundSchema = z.object({
+  name: z.string().trim().min(1),
+  category: z.string().trim().min(1),
+  assetType: z.enum(["Mutual Fund", "Govt Scheme", "Stock"]),
+  folioNumber: z.string().trim().optional().default(""),
+  startDate: z.string().min(1),
+  latestNav: z.number().positive().optional(),
 });
 
 type FundPosition = {
@@ -250,6 +260,61 @@ export async function updateFundLatestNav(input: {
     await hydrateFundsWithLiveMarketData(funds);
   return {
     fundId: fund.fundId,
+    dashboard: buildDashboardSnapshot(
+      workbookContext,
+      hydratedFunds,
+      transactions,
+      stockQuotesByFundId
+    ),
+  };
+}
+
+export async function addFund(input: NewFundInput) {
+  const workbookContext = await getWorkbookContextOrThrow(DEFAULT_WORKBOOK_PATH);
+  const workbookPath = workbookContext.localPath;
+  const parsed = newFundSchema.parse(input);
+  const { workbook, funds, transactions } = readPortfolioWorkbook(workbookPath, true);
+
+  if (!workbook) {
+    throw new Error("Workbook could not be opened.");
+  }
+
+  if (
+    funds.some(
+      (fund) =>
+        fund.name.trim().toLowerCase() === parsed.name.toLowerCase() &&
+        fund.folioNumber.trim().toLowerCase() === parsed.folioNumber.toLowerCase()
+    )
+  ) {
+    throw new Error("A fund with this name and folio already exists.");
+  }
+
+  const latestNav = parsed.latestNav ?? 0;
+  const latestNavDate = latestNav > 0 ? parsed.startDate : "";
+  const newFund: FundRecord = {
+    fundId: buildFundId(funds, parsed),
+    name: parsed.name,
+    category: parsed.category,
+    assetType: parsed.assetType,
+    folioNumber: parsed.folioNumber,
+    startDate: parsed.startDate,
+    statementDate: latestNavDate,
+    latestNavDate,
+    currentUnits: 0,
+    latestNav,
+    holdingCost: 0,
+    currentValue: 0,
+    profitLoss: 0,
+    absoluteReturn: 0,
+  };
+
+  writePortfolioWorkbook(workbookPath, workbook, [...funds, newFund], transactions);
+  await persistWorkbookIfBlob(workbookContext);
+
+  const { funds: hydratedFunds, stockQuotesByFundId } =
+    await hydrateFundsWithLiveMarketData([...funds, newFund]);
+  return {
+    fundId: newFund.fundId,
     dashboard: buildDashboardSnapshot(
       workbookContext,
       hydratedFunds,
@@ -517,6 +582,36 @@ function getNextRowId(transactions: TransactionRecord[]) {
   }, 0);
 
   return `ROW-${String(highestNumber + 1).padStart(6, "0")}`;
+}
+
+function buildFundId(
+  existingFunds: FundRecord[],
+  input: z.infer<typeof newFundSchema>
+) {
+  const prefix =
+    input.assetType === "Mutual Fund"
+      ? "MF"
+      : input.assetType === "Govt Scheme"
+        ? "GS"
+        : "ST";
+  const folioPart = input.folioNumber
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, "")
+    .slice(-12);
+  const namePart = input.name
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 24);
+  const base = [prefix, namePart, folioPart].filter(Boolean).join("-");
+
+  let candidate = base || `${prefix}-FUND`;
+  let counter = 2;
+  while (existingFunds.some((fund) => fund.fundId === candidate)) {
+    candidate = `${base || `${prefix}-FUND`}-${counter}`;
+    counter += 1;
+  }
+  return candidate;
 }
 
 function readPortfolioWorkbook(workbookPath: string, includeWorkbook = false) {
