@@ -116,6 +116,25 @@ export type DashboardData = {
   transactions: TransactionRecord[];
 };
 
+export type BudgetPlannerItem = {
+  itemId: string;
+  category: string;
+  type: "Fixed" | "Variable";
+  monthlyAmountUsd: number;
+  notes: string;
+};
+
+export type BudgetPlannerData = {
+  workbookName: string;
+  workbookPath: string;
+  items: BudgetPlannerItem[];
+  totals: {
+    fixedMonthlyUsd: number;
+    variableMonthlyUsd: number;
+    totalMonthlyUsd: number;
+  };
+};
+
 export type NewTransactionInput = {
   transactionDate: string;
   fundId: string;
@@ -137,4 +156,11 @@ export type NewFundInput = {
   startDate: string;
   latestNav?: number;
   currentBalance?: number;
+};
+
+export type NewBudgetPlannerItemInput = {
+  category: string;
+  type: "Fixed" | "Variable";
+  monthlyAmountUsd: number;
+  notes?: string;
 };
