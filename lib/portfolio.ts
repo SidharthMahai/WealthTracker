@@ -45,6 +45,11 @@ const updateNavSchema = z.object({
   latestNavDate: z.string().min(1),
 });
 
+const updateBankBalanceSchema = z.object({
+  fundId: z.string().min(1),
+  currentBalance: z.number().nonnegative(),
+});
+
 const newFundSchema = z.object({
   name: z.string().trim().min(1),
   category: z.string().trim().min(1),
@@ -283,6 +288,62 @@ export async function updateFundLatestNav(input: {
 
   fund.latestNav = roundToTwo(parsed.latestNav);
   fund.latestNavDate = parsed.latestNavDate;
+
+  writePortfolioWorkbook(workbookPath, workbook, funds, transactions);
+  await persistWorkbookIfBlob(workbookContext);
+
+  const { funds: hydratedFunds, stockQuotesByFundId, usdBankQuotesByFundId } =
+    await hydrateFundsWithLiveMarketData(funds);
+  return {
+    fundId: fund.fundId,
+    dashboard: buildDashboardSnapshot(
+      workbookContext,
+      hydratedFunds,
+      transactions,
+      stockQuotesByFundId,
+      usdBankQuotesByFundId
+    ),
+  };
+}
+
+export async function updateBankAccountBalance(input: {
+  fundId: string;
+  currentBalance: number;
+}) {
+  const workbookContext = await getWorkbookContextOrThrow(DEFAULT_WORKBOOK_PATH);
+  const workbookPath = workbookContext.localPath;
+  const parsed = updateBankBalanceSchema.parse(input);
+
+  const { workbook, funds, transactions } = readPortfolioWorkbook(workbookPath, true);
+  if (!workbook) {
+    throw new Error("Workbook could not be opened.");
+  }
+
+  const fund = getFundOrThrow(funds, parsed.fundId);
+  const assetType = (fund.assetType || "").toLowerCase();
+  if (!assetType.startsWith("bank account")) {
+    throw new Error("Only bank accounts support balance updates here.");
+  }
+
+  const currentBalance = roundToTwo(parsed.currentBalance);
+  fund.currentUnits = currentBalance;
+
+  if (assetType === "bank account (inr)") {
+    fund.latestNav = 1;
+    fund.currentValue = currentBalance;
+    fund.latestNavDate = new Date().toISOString().slice(0, 10);
+    fund.statementDate = fund.latestNavDate;
+  } else {
+    try {
+      const fx = await fetchUsdInrFx();
+      fund.latestNav = roundToFour(fx.inrPerUsd);
+      fund.latestNavDate = fx.asOf.slice(0, 10);
+      fund.statementDate = fund.latestNavDate;
+      fund.currentValue = roundToTwo(currentBalance * fx.inrPerUsd);
+    } catch {
+      fund.currentValue = roundToTwo(currentBalance * fund.latestNav);
+    }
+  }
 
   writePortfolioWorkbook(workbookPath, workbook, funds, transactions);
   await persistWorkbookIfBlob(workbookContext);

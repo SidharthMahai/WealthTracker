@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { addFund, updateFundLatestNav } from "@/lib/portfolio";
+import { addFund, updateBankAccountBalance, updateFundLatestNav } from "@/lib/portfolio";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -26,17 +26,24 @@ export async function PATCH(request: Request) {
       fundId?: string;
       latestNav?: number;
       latestNavDate?: string;
+      currentBalance?: number;
     };
 
     if (!payload.fundId) {
       return NextResponse.json({ error: "Fund ID is required." }, { status: 400 });
     }
 
-    const result = await updateFundLatestNav({
-      fundId: payload.fundId,
-      latestNav: Number(payload.latestNav),
-      latestNavDate: payload.latestNavDate || new Date().toISOString().slice(0, 10),
-    });
+    const result =
+      payload.currentBalance !== undefined
+        ? await updateBankAccountBalance({
+            fundId: payload.fundId,
+            currentBalance: Number(payload.currentBalance),
+          })
+        : await updateFundLatestNav({
+            fundId: payload.fundId,
+            latestNav: Number(payload.latestNav),
+            latestNavDate: payload.latestNavDate || new Date().toISOString().slice(0, 10),
+          });
 
     return NextResponse.json(
       { ok: true, ...result },
@@ -44,7 +51,7 @@ export async function PATCH(request: Request) {
     );
   } catch (error) {
     const message =
-      error instanceof Error ? error.message : "Failed to update fund NAV.";
+      error instanceof Error ? error.message : "Failed to update fund.";
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }

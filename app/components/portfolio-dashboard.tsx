@@ -267,6 +267,64 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
     }
   }
 
+  async function updateBalanceForBankAccount(fund: {
+    fundId: string;
+    name: string;
+    assetType: string;
+    currentUnits: number;
+  }) {
+    const currencyLabel = fund.assetType === "Bank Account (USD)" ? "USD" : "INR";
+    const balanceInput = window.prompt(
+      `Update current balance for ${fund.name} (${currencyLabel}):`,
+      String(fund.currentUnits || "")
+    );
+
+    if (balanceInput === null) {
+      return;
+    }
+
+    const nextBalance = Number(balanceInput);
+    if (!Number.isFinite(nextBalance) || nextBalance < 0) {
+      window.alert("Please enter a valid balance.");
+      return;
+    }
+
+    try {
+      setRefreshing(true);
+      setRefreshError("");
+      const response = await fetch("/api/funds", {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fundId: fund.fundId,
+          currentBalance: nextBalance,
+        }),
+      });
+
+      const payload = (await response.json()) as {
+        ok?: boolean;
+        error?: string;
+        dashboard?: DashboardData;
+      };
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Unable to update bank balance.");
+      }
+
+      if (payload.dashboard) {
+        applyDashboardUpdate(payload.dashboard);
+      } else {
+        await refreshDashboard();
+      }
+    } catch (error) {
+      setRefreshError(
+        error instanceof Error ? error.message : "Unable to update bank balance."
+      );
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
   async function createFund(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     try {
@@ -1200,6 +1258,15 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
                         disabled={refreshing}
                       >
                         Edit NAV
+                      </button>
+                    ) : fund.assetType.startsWith("Bank Account") ? (
+                      <button
+                        type="button"
+                        className="link-button"
+                        onClick={() => updateBalanceForBankAccount(fund)}
+                        disabled={refreshing}
+                      >
+                        Edit balance
                       </button>
                     ) : (
                       "—"
