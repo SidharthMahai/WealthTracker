@@ -1,5 +1,5 @@
 "use client";
-import { AssetPanel } from "@/app/components/asset-panel";
+import { useAssets } from "@/app/components/use-assets";
 
 import { startTransition, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -164,7 +164,8 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
     );
   }, [currentDashboard.transactions, fundMetaById]);
 
-  const [additionalAssetValue, setAdditionalAssetValue] = useState<number | null>(null);
+  const { assets, assetError, refreshAssets, editCash } = useAssets();
+  const additionalAssetValue = assets && assets.goldValue !== null ? assets.cash + assets.goldValue : null;
   const totalNetWorth = additionalAssetValue === null
     ? null
     : currentDashboard.metrics.netWorthCurrentValue + additionalAssetValue;
@@ -446,8 +447,11 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
         </div>
       </section>
 
-      <AssetPanel onValueChange={setAdditionalAssetValue} bankValue={currentDashboard.fundSummaries.filter(fund => fund.assetType.startsWith("Bank Account")).reduce((total, fund) => total + fund.currentValue, 0)} />
+      {assetError && <p className="error-text" role="alert">{assetError}</p>}
       <section className="metrics-grid">
+        <MetricCard label="Cash in bank" value={formatInrCompact(currentDashboard.fundSummaries.filter(fund => fund.assetType.startsWith("Bank Account")).reduce((total, fund) => total + fund.currentValue, 0))} />
+        <MetricCard label="Cash in hand" value={assets ? formatInrCompact(assets.cash) : "—"} />
+        <MetricCard label="Gold (current)" value={assets?.goldValue != null ? formatInrCompact(assets.goldValue) : "Unavailable"} detail={assets?.asOf ? `Spot estimate · ${assets.asOf}` : "Spot estimate · excludes taxes and making charges"} />
         <MetricCard
           label="Net worth (current)"
           value={totalNetWorth === null ? "Unavailable" : formatInrCompact(totalNetWorth)}
@@ -752,6 +756,7 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
       {workbookConfigured ? (
         <section className="wide-grid">
           <AddInvestmentForm
+            onAssetsUpdated={refreshAssets}
             funds={currentDashboard.funds}
             onSaved={refreshDashboard}
             onDashboardUpdated={applyDashboardUpdate}
@@ -1186,6 +1191,19 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
               </tr>
             </thead>
             <tbody>
+              <tr>
+                <td><strong>Cash in hand</strong></td><td>Cash</td><td>Cash</td>
+                <td className="numeric-cell">{assets ? formatInrFull(assets.cash) : "—"}</td><td>—</td>
+                <td className="numeric-cell current-value-col">{assets ? formatInrFull(assets.cash) : "—"}</td>
+                <td>—</td><td>—</td><td className="actions-cell"><button type="button" className="link-button" onClick={editCash} disabled={!assets}>Edit balance</button></td>
+              </tr>
+              {assets?.gold.map((item, index) => (
+                <tr key={`gold-${index}`}>
+                  <td><strong>Gold · {item.karat} KT</strong><span className="subtle-line">{item.acquisition} · {item.date}</span></td>
+                  <td>Gold</td><td>Physical Gold</td><td className="numeric-cell">{item.grams} g</td><td>—</td>
+                  <td className="numeric-cell current-value-col">{assets.rate === null ? "Unavailable" : formatInrFull(item.grams * item.karat / 24 * assets.rate)}</td><td>—</td><td>—</td><td>—</td>
+                </tr>
+              ))}
               {activeFundSummaries.map((fund) => (
                 <tr key={fund.fundId}>
                   <td>

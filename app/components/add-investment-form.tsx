@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import type { DashboardData, FundOption } from "@/lib/types";
 
 type AddInvestmentFormProps = {
+  onAssetsUpdated?: () => Promise<void>;
   funds: FundOption[];
   onSaved?: () => Promise<boolean | void> | boolean | void;
   onDashboardUpdated?: (dashboard: DashboardData) => void;
@@ -13,6 +14,7 @@ export function AddInvestmentForm({
   funds,
   onSaved,
   onDashboardUpdated,
+  onAssetsUpdated,
 }: AddInvestmentFormProps) {
   const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
   const [form, setForm] = useState({
@@ -28,6 +30,8 @@ export function AddInvestmentForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [karat, setKarat] = useState("22");
+  const isGold = form.fundId === "__physical_gold__";
 
   const selectedFund = useMemo(
     () => funds.find((fund) => fund.fundId === form.fundId) ?? null,
@@ -38,6 +42,7 @@ export function AddInvestmentForm({
   const isGovtScheme = selectedAssetType === "govt scheme";
   const isInterestCredited = form.transactionType === "Interest Credited";
   const entryTypeOptions = useMemo(() => {
+    if (isGold) return [{ label: "Purchase", value: "Purchase" }, { label: "Gift", value: "Gift" }];
     const options = [{ label: "Lumpsum", value: "Purchase" }];
     if (isMutualFund) {
       options.push({ label: "SIP", value: "SIP" });
@@ -47,7 +52,7 @@ export function AddInvestmentForm({
     }
     options.push({ label: "Redemption", value: "Redemption" });
     return options;
-  }, [isGovtScheme, isMutualFund]);
+  }, [isGovtScheme, isMutualFund, isGold]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -56,6 +61,18 @@ export function AddInvestmentForm({
     setNotice("Saving…");
 
     try {
+      if (isGold) {
+        const response = await fetch("/api/assets", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ kind: "gold", acquisition: form.transactionType, date: form.transactionDate, grams: Number(form.units), karat: Number(karat) }),
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || "Unable to save gold.");
+        await onAssetsUpdated?.();
+        setForm(current => ({ ...current, units: "" }));
+        setNotice("Saved.");
+        return;
+      }
       const response = await fetch("/api/transactions", {
         method: "POST",
         credentials: "include",
@@ -134,13 +151,10 @@ export function AddInvestmentForm({
     <form className="panel form-panel" onSubmit={handleSubmit}>
       <div className="panel-heading">
         <div>
-          <h2>Add a new entry</h2>
+          <h2>Add new transaction</h2>
         </div>
         <p className="muted">
-          Add contributions, credited interest, or redemptions. The app writes
-          directly into the <code>Transactions</code> sheet and keeps purchase
-          value separate from interest credits. For mutual funds, you can save
-          both the historical transaction NAV and today&apos;s current NAV.
+          Add investments, interest, redemptions, or gold purchases and gifts.
         </p>
       </div>
 
@@ -156,7 +170,7 @@ export function AddInvestmentForm({
         </label>
 
         <label>
-          <span>Fund</span>
+          <span>Asset</span>
           <select
             value={form.fundId}
             onChange={(event) => {
@@ -169,7 +183,7 @@ export function AddInvestmentForm({
                 (nextFund?.assetType || "").toLowerCase() === "govt scheme";
 
               setForm((current) => {
-                const next = { ...current, fundId: nextFundId };
+                const next = { ...current, fundId: nextFundId, transactionType: "Purchase", direction: "Contribution" as const, units: "", amountInvested: "", nav: "" };
                 if (!nextIsMutualFund && next.transactionType === "SIP") {
                   next.transactionType = "Purchase";
                 }
@@ -184,6 +198,7 @@ export function AddInvestmentForm({
             }}
             required
           >
+            <option value="__physical_gold__">Physical gold</option>
             {funds.map((fund) => (
               <option key={fund.fundId} value={fund.fundId}>
                 {fund.name}
@@ -215,6 +230,13 @@ export function AddInvestmentForm({
           </select>
         </label>
 
+        {isGold ? (
+          <>
+            <label><span>Purity (KT)</span><input type="number" min="1" max="24" step="1" value={karat} onChange={event => setKarat(event.target.value)} required /></label>
+            <label><span>Weight (grams)</span><input type="number" min="0.001" step="0.001" value={form.units} onChange={event => updateField("units", event.target.value)} required /></label>
+            <p className="muted">Current value is calculated from weight, purity and the live gold spot rate.</p>
+          </>
+        ) : (<>
         <label>
           <span>
             {form.direction === "Redemption"
@@ -291,12 +313,13 @@ export function AddInvestmentForm({
             />
           </label>
         ) : null}
+        </>)}
       </div>
 
       <div className="form-footer">
         {error ? <p className="error-text">{error}</p> : null}
         {!error && notice ? <p className="muted">{notice}</p> : null}
-        <button type="submit" disabled={isSubmitting || !funds.length}>
+        <button type="submit" disabled={isSubmitting || (!isGold && !funds.length)}>
           Save entry
         </button>
       </div>
