@@ -451,7 +451,7 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
       <section className="metrics-grid">
         <MetricCard label="Cash in bank" value={formatInrCompact(currentDashboard.fundSummaries.filter(fund => fund.assetType.startsWith("Bank Account")).reduce((total, fund) => total + fund.currentValue, 0))} />
         <MetricCard label="Cash in hand" value={assets ? formatInrCompact(assets.cash) : "—"} />
-        <MetricCard label="Gold (current)" value={assets?.goldValue != null ? formatInrCompact(assets.goldValue) : "Unavailable"} detail={assets?.asOf ? `Spot estimate · ${assets.asOf}` : "Spot estimate · excludes taxes and making charges"} />
+        <MetricCard label="Gold (current)" value={assets?.goldValue != null ? formatInrCompact(assets.goldValue) : "Unavailable"} detail="Spot estimate · excludes taxes and making charges" />
         <MetricCard
           label="Net worth (current)"
           value={totalNetWorth === null ? "Unavailable" : formatInrCompact(totalNetWorth)}
