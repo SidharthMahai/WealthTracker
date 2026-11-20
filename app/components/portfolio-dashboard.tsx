@@ -1,4 +1,5 @@
 "use client";
+import { AssetPanel } from "@/app/components/asset-panel";
 
 import { startTransition, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -162,6 +163,11 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
       fundMetaById
     );
   }, [currentDashboard.transactions, fundMetaById]);
+
+  const [additionalAssetValue, setAdditionalAssetValue] = useState<number | null>(null);
+  const totalNetWorth = additionalAssetValue === null
+    ? null
+    : currentDashboard.metrics.netWorthCurrentValue + additionalAssetValue;
 
   const netWorthTone =
     currentDashboard.metrics.mutualFundProfitLoss +
@@ -440,11 +446,12 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
         </div>
       </section>
 
+      <AssetPanel onValueChange={setAdditionalAssetValue} bankValue={currentDashboard.fundSummaries.filter(fund => fund.assetType.startsWith("Bank Account")).reduce((total, fund) => total + fund.currentValue, 0)} />
       <section className="metrics-grid">
         <MetricCard
           label="Net worth (current)"
-          value={formatInrCompact(currentDashboard.metrics.netWorthCurrentValue)}
-          detail={formatInrFull(currentDashboard.metrics.netWorthCurrentValue)}
+          value={totalNetWorth === null ? "Unavailable" : formatInrCompact(totalNetWorth)}
+          detail={totalNetWorth === null ? "Waiting for cash and gold valuation" : formatInrFull(totalNetWorth)}
           tone={netWorthTone}
         />
         <MetricCard
@@ -481,11 +488,6 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
           value={formatInrCompact(currentDashboard.metrics.stockCurrentValue)}
           detail={formatInrFull(currentDashboard.metrics.stockCurrentValue)}
           tone="positive"
-        />
-        <MetricCard
-          label="Govt schemes (purchase)"
-          value={formatInrCompact(currentDashboard.metrics.schemePurchaseValue)}
-          detail={formatInrFull(currentDashboard.metrics.schemePurchaseValue)}
         />
         <MetricCard
           label="Govt schemes (current)"
