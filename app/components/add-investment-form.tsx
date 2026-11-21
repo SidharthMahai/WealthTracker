@@ -234,7 +234,7 @@ export function AddInvestmentForm({
           <>
             <label><span>Purity (KT)</span><input type="number" min="1" max="24" step="1" value={karat} onChange={event => setKarat(event.target.value)} required /></label>
             <label><span>Weight (grams)</span><input type="number" min="0.001" step="0.001" value={form.units} onChange={event => updateField("units", event.target.value)} required /></label>
-            <p className="muted">Current value is calculated from weight, purity and the live gold spot rate.</p>
+            <p className="muted">Current value uses the Delhi 24K rate per gram, adjusted for weight and purity. Excludes making charges and taxes.</p>
           </>
         ) : (<>
         <label>

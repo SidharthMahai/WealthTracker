@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import * as XLSX from "xlsx";
 import { z } from "zod";
+import { fetchDelhiGoldRate } from "@/lib/indian-gold";
 import { getWorkbookContextOrThrow, persistWorkbookIfBlob } from "@/lib/workbook-storage";
 
 const schema = z.discriminatedUnion("kind", [
@@ -32,12 +33,9 @@ export async function assetSnapshot(input?: unknown) {
     let rate: number | null = null;
     let asOf: string | null = null;
     try {
-      const response = await fetch("https://api.gold-api.com/price/XAU/INR", { cache: "no-store", signal: AbortSignal.timeout(8000) });
-      if (!response.ok) throw new Error("Quote unavailable");
-      const quote = await response.json();
-      if (quote.currency !== "INR" || !Number.isFinite(quote.price) || quote.price <= 0) throw new Error("Invalid quote");
-      rate = quote.price / 31.1034768;
-      asOf = quote.updatedAt;
+      const quote = await fetchDelhiGoldRate();
+      rate = quote.rate;
+      asOf = quote.asOf;
     } catch {}
     const pureGrams = gold.reduce((total, item) => total + Number(item.grams) * Number(item.karat) / 24, 0);
     return { cash, gold, rate, asOf, goldValue: pureGrams === 0 ? 0 : rate === null ? null : pureGrams * rate };
