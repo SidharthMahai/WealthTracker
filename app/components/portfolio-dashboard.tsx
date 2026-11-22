@@ -544,7 +544,7 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
             .reduce((total, fund) => total + fund.currentValue, 0))}
         />
         <MetricCard label="Cash in hand" value={assets ? formatInrCompact(assets.cash) : "—"} />
-        <MetricCard label="Gold (current)" value={assets?.goldValue != null ? formatInrCompact(assets.goldValue) : "Unavailable"} />
+        <MetricCard label="Gold (current)" value={assets?.goldValue != null ? formatInrCompact(assets.goldValue) : "Unavailable"} detail={<><a href="https://ratetoday.co.in/gold/delhi" target="_blank" rel="noreferrer">Delhi 24KT</a>{assets?.rate != null ? ` · ${formatInrFull(assets.rate)}/g` : " · Rate unavailable"}</>} />
       </section>
 
       <section className="wide-grid">
