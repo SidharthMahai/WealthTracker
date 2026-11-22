@@ -1202,21 +1202,24 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
               </tr>
             </thead>
             <tbody>
-              <tr>
+              {[
+                { name: "Cash in hand", row: <tr key="cash-in-hand">
                 <td><strong>Cash in hand</strong></td><td>Cash</td><td>Cash</td>
                 <td className="numeric-cell">{assets ? formatInrFull(assets.cash) : "—"}</td><td>—</td>
                 <td className="numeric-cell current-value-col">{assets ? formatInrFull(assets.cash) : "—"}</td>
                 <td>—</td><td>—</td><td className="actions-cell"><button type="button" className="link-button" onClick={editCash} disabled={!assets}>Edit balance</button></td>
-              </tr>
-              {assets?.gold.map((item, index) => (
-                <tr key={`gold-${index}`}>
+              </tr> },
+              ...(assets?.gold.map((item, index) => ({
+                name: `Gold · ${item.karat} KT`,
+                row: <tr key={`gold-${index}`}>
                   <td><strong>Gold · {item.karat} KT</strong><span className="subtle-line">{item.acquisition} · {item.date}</span></td>
                   <td>Gold</td><td>Physical Gold</td><td className="numeric-cell">{item.grams} g</td><td>—</td>
                   <td className="numeric-cell current-value-col">{assets.rate === null ? "Unavailable" : formatInrFull(item.grams * item.karat / 24 * assets.rate)}</td><td>—</td><td>—</td><td>—</td>
                 </tr>
-              ))}
-              {activeFundSummaries.map((fund) => (
-                <tr key={fund.fundId}>
+              })) ?? []),
+              ...activeFundSummaries.map((fund) => ({
+                name: fund.name,
+                row: <tr key={fund.fundId}>
                   <td>
                     <strong>{fund.name}</strong>
                     {fund.accountNumber ? (
@@ -1304,7 +1307,9 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
                     )}
                   </td>
                 </tr>
-              ))}
+              }))
+              ].sort((left, right) => left.name.localeCompare(right.name, "en", { sensitivity: "base", numeric: true }))
+                .map(holding => holding.row)}
             </tbody>
           </table>
         </div>
