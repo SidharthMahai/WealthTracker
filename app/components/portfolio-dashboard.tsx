@@ -170,6 +170,8 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
     ? null
     : currentDashboard.metrics.netWorthCurrentValue + additionalAssetValue;
 
+  const xomPriceUsd = currentDashboard.fundSummaries.find(fund => fund.fundId === "STOCK-XOM")?.stockPriceUsd;
+
   const netWorthTone =
     currentDashboard.metrics.mutualFundProfitLoss +
       currentDashboard.metrics.schemeInterestCredited >=
@@ -504,7 +506,7 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
         <MetricCard
           label="Stocks (current)"
           value={formatInrCompact(currentDashboard.metrics.stockCurrentValue)}
-          detail={formatInrFull(currentDashboard.metrics.stockCurrentValue)}
+          detail={<><a href="https://finance.yahoo.com/quote/XOM/" target="_blank" rel="noreferrer">XOM · Yahoo Finance</a>{xomPriceUsd != null ? ` · ${formatUsd(xomPriceUsd)} USD/share` : " · USD price unavailable"}</>}
           tone="positive"
         />
         <MetricCard
