@@ -332,6 +332,23 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
     }
   }
 
+  async function editNpsValue(fund: { fundId: string; currentValue: number }) {
+    const input = window.prompt("NPS current value (INR)", String(fund.currentValue));
+    if (input === null) return;
+    const currentValue = Number(input);
+    if (!input.trim() || !Number.isFinite(currentValue) || currentValue < 0) {
+      setRefreshError("Enter a valid non-negative current value."); return;
+    }
+    setRefreshing(true); setRefreshError("");
+    try {
+      const response = await fetch("/api/funds", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fundId: fund.fundId, currentValue }) });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Unable to update NPS.");
+      applyDashboardUpdate(result.dashboard);
+    } catch (error) { setRefreshError(error instanceof Error ? error.message : "Unable to update NPS."); }
+    finally { setRefreshing(false); }
+  }
+
   async function createFund(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     try {
@@ -1284,7 +1301,9 @@ export function PortfolioDashboard({ dashboard }: PortfolioDashboardProps) {
                       : formatPercent(fund.absoluteReturn)}
                   </td>
                   <td className="actions-cell">
-                    {fund.assetType === "Mutual Fund" ? (
+                    {/\bnps\b|national pension/i.test(fund.name) ? (
+                      <button type="button" className="link-button" onClick={() => editNpsValue(fund)} disabled={refreshing}>Edit current value</button>
+                    ) : fund.assetType === "Mutual Fund" ? (
                       <button
                         type="button"
                         className="link-button"

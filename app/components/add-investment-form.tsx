@@ -198,8 +198,9 @@ export function AddInvestmentForm({
             }}
             required
           >
-            <option value="__physical_gold__">Physical gold</option>
-            {funds.map((fund) => (
+            {[...funds, { fundId: "__physical_gold__", name: "Physical gold", assetType: "Gold" }]
+              .sort((left, right) => left.name.localeCompare(right.name, "en", { sensitivity: "base", numeric: true }))
+              .map((fund) => (
               <option key={fund.fundId} value={fund.fundId}>
                 {fund.name}
               </option>

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { addFund, updateBankAccountBalance, updateFundLatestNav } from "@/lib/portfolio";
+import { addFund, updateBankAccountBalance, updateFundLatestNav, updateNpsCurrentValue } from "@/lib/portfolio";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -27,6 +27,7 @@ export async function PATCH(request: Request) {
       latestNav?: number;
       latestNavDate?: string;
       currentBalance?: number;
+      currentValue?: number;
     };
 
     if (!payload.fundId) {
@@ -34,7 +35,9 @@ export async function PATCH(request: Request) {
     }
 
     const result =
-      payload.currentBalance !== undefined
+      payload.currentValue !== undefined
+        ? await updateNpsCurrentValue({ fundId: payload.fundId, currentValue: payload.currentValue })
+        : payload.currentBalance !== undefined
         ? await updateBankAccountBalance({
             fundId: payload.fundId,
             currentBalance: Number(payload.currentBalance),

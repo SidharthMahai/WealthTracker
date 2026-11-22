@@ -306,6 +306,20 @@ export async function updateFundLatestNav(input: {
   };
 }
 
+export async function updateNpsCurrentValue(input: unknown) {
+  const parsed = z.object({ fundId: z.string().min(1), currentValue: z.number().finite().nonnegative() }).parse(input);
+  const context = await getWorkbookContextOrThrow(DEFAULT_WORKBOOK_PATH);
+  const { workbook, funds, transactions } = readPortfolioWorkbook(context.localPath, true);
+  if (!workbook) throw new Error("Workbook could not be opened.");
+  const fund = getFundOrThrow(funds, parsed.fundId);
+  if (!/\bnps\b|national pension/i.test(fund.name)) throw new Error("Only NPS supports this valuation update.");
+  fund.manualCurrentValue = roundToTwo(parsed.currentValue);
+  fund.statementDate = new Date().toISOString().slice(0, 10);
+  writePortfolioWorkbook(context.localPath, workbook, funds, transactions);
+  await persistWorkbookIfBlob(context);
+  return { fundId: fund.fundId, dashboard: await getDashboardData() };
+}
+
 export async function updateBankAccountBalance(input: {
   fundId: string;
   currentBalance: number;
@@ -826,6 +840,14 @@ function readPortfolioWorkbook(workbookPath: string, includeWorkbook = false) {
     cellDates: false,
   });
   const funds = parseFunds(workbook);
+  const valuations = workbook.Sheets["Manual Valuations"]
+    ? XLSX.utils.sheet_to_json<{ fundId: string; currentValue: number }>(workbook.Sheets["Manual Valuations"]) : [];
+  for (const fund of funds) {
+    const valuation = valuations.find(item => item.fundId === fund.fundId);
+    if (valuation && Number.isFinite(Number(valuation.currentValue)) && Number(valuation.currentValue) >= 0) {
+      fund.manualCurrentValue = Number(valuation.currentValue);
+    }
+  }
   const transactions = parseTransactions(workbook);
 
   return {
@@ -850,6 +872,10 @@ function writePortfolioWorkbook(
   );
   const fundSummaries = buildFundSummaries(funds, balancedTransactions);
   const yearlySummary = buildYearlyChart(balancedTransactions);
+  const valuationSheet = XLSX.utils.json_to_sheet(funds.filter(fund => fund.manualCurrentValue !== undefined)
+    .map(fund => ({ fundId: fund.fundId, currentValue: fund.manualCurrentValue })));
+  if (!workbook.SheetNames.includes("Manual Valuations")) workbook.SheetNames.push("Manual Valuations");
+  workbook.Sheets["Manual Valuations"] = valuationSheet;
 
   workbook.Sheets["Transactions"] = XLSX.utils.aoa_to_sheet([
     [
@@ -1232,6 +1258,12 @@ function buildFundSummaries(
         absoluteReturn: totalInvested === 0 ? 0 : profitLoss / totalInvested,
         transactionCount: fundTransactions.length,
       };
+    })
+    .map(summary => {
+      const value = funds.find(fund => fund.fundId === summary.fundId)?.manualCurrentValue;
+      if (value === undefined) return summary;
+      const profitLoss = roundToTwo(value - summary.totalInvested);
+      return { ...summary, currentValue: value, profitLoss, absoluteReturn: summary.totalInvested === 0 ? 0 : profitLoss / summary.totalInvested };
     })
     .sort((left, right) => right.currentValue - left.currentValue);
 }

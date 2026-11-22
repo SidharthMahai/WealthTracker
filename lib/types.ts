@@ -1,4 +1,5 @@
 export type FundRecord = {
+  manualCurrentValue?: number;
   fundId: string;
   name: string;
   category: string;
